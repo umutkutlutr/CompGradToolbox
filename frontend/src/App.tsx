@@ -10,6 +10,7 @@ import TAAssignmentCoordinator from './components/TAAssignmentCoordinator';
 import ReportChecker from './components/ReportChecker';
 import RulesAndWeights from './components/RulesAndWeights';
 import AuditLogs from './components/AuditLogs';
+import PeopleDirectory from './components/PeopleDirectory';
 
 export type UserRole = 'faculty' | 'student' | 'admin';
 
@@ -85,6 +86,8 @@ export default function App() {
         return <RulesAndWeights />;
       case 'audit-logs':
         return <AuditLogs />;
+      case 'people-directory':
+        return <PeopleDirectory />;
       default:
         return <Dashboard userName={userName} userRole={userRole} onNavigate={setCurrentPage} />;
     }

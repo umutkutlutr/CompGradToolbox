@@ -3,6 +3,8 @@ from app.core.config import settings
 from app.routes import algorithm
 from app.routes import algorithm_excel
 from app.routes import assignment
+from app.routes import tas
+from app.routes import professors
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -19,6 +21,9 @@ app.add_middleware(
 app.include_router(algorithm.router, prefix="/api", tags=["Algorithm"])
 app.include_router(algorithm_excel.router, prefix="/api", tags=["Algorithm, Excel"])
 app.include_router(assignment.router, prefix="/api", tags=["Assignment"])
+app.include_router(tas.router, prefix="/api", tags=["TAs"])
+app.include_router(professors.router, prefix="/api", tags=["Professors"])
+
 
 
 
