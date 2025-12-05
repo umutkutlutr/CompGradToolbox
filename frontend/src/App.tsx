@@ -72,7 +72,7 @@ export default function App() {
         return <Dashboard name={name} userRole={userRole} onNavigate={setCurrentPage} />;
       case 'ta-assignment':
         if (userRole === 'student') {
-          return <TAProfileStudent/>;
+          return <TAProfileStudent taId={userId} />;
         } else if (userRole === 'admin') {
           return <TAAssignmentCoordinator onNavigate={setCurrentPage} />;
         }

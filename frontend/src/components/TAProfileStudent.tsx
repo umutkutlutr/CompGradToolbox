@@ -10,28 +10,43 @@ type TAProfileStudentProps = {
   taId: number | null;
 };
 
-type CourseInterestLevel = 'high' | 'medium' | 'low' | null;
+type Course = {
+  course_id: number;
+  course_code: string;
+  ps_lab_sections: string;
+  enrollment_capacity: number;
+  actual_enrollment: number;
+  num_tas_requested: number;
+  assigned_tas_count: number;
+  skills: string[];
+};
+
+type CourseInterestLevel = 'High' | 'Medium' | 'Low' | null;
 
 export default function TAProfileStudent({ taId }: TAProfileStudentProps) {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [taData, setTaData] = useState<any>(null);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [skills, setSkills] = useState<string[]>([]);
+  const [newSkill, setNewSkill] = useState('');
   const [workload, setWorkload] = useState([50]);
   const [courseInterests, setCourseInterests] = useState<Record<string, CourseInterestLevel>>({});
+  const [saving, setSaving] = useState(false);
 
-  const courses = [
-    { code: 'COMP302', name: 'Programming Languages' },
-    { code: 'COMP310', name: 'Operating Systems' },
-    { code: 'COMP421', name: 'Database Systems' },
-    { code: 'COMP424', name: 'Artificial Intelligence' },
-    { code: 'COMP551', name: 'Applied Machine Learning' },
-  ];
-
+  // Fetch courses
   useEffect(() => {
-    if (!taId) return;
+    fetch('http://localhost:8000/courses/') // make sure the full path is correct
+      .then(res => res.json())
+      .then((data: Course[]) => setCourses(data))
+      .catch(err => console.error('Error fetching courses:', err));
+  }, []);
+
+  // Fetch TA data after courses are loaded
+  useEffect(() => {
+    if (!taId || courses.length === 0) return;
 
     setLoading(true);
-    fetch(`/api/tas/${taId}`)
+    fetch(`http://localhost:8000/api/tas/${taId}`)
       .then(res => res.json())
       .then(data => {
         setTaData(data);
@@ -39,27 +54,70 @@ export default function TAProfileStudent({ taId }: TAProfileStudentProps) {
         const sliderVal = data.max_hours ? Math.round(((data.max_hours - 5) / 15) * 100) : 50;
         setWorkload([sliderVal]);
 
-        // Initialize courseInterests for all courses
+        // Initialize course interests for all courses
         const interests: Record<string, CourseInterestLevel> = {};
         courses.forEach(course => {
-          interests[course.code] = data.course_interests?.[course.code] ?? null;
+          interests[course.course_code] = data.course_interests?.[course.course_code] ?? null;
         });
         setCourseInterests(interests);
       })
-      .catch(err => console.error(err))
+      .catch(err => console.error('Error fetching TA data:', err))
       .finally(() => setLoading(false));
-  }, [taId]);
+  }, [taId, courses]);
 
   const getInterestColor = (interest: string) => {
     switch (interest) {
-      case 'high': return 'bg-green-600 hover:bg-green-700';
-      case 'medium': return 'bg-amber-600 hover:bg-amber-700';
-      case 'low': return 'bg-neutral-400 hover:bg-neutral-500';
-      default: return 'bg-neutral-400 hover:bg-neutral-500';
+      case 'High': return 'bg-green-600 hover:bg-green-700';
+      case 'Medium': return 'bg-amber-600 hover:bg-amber-700';
+      case 'Low': return 'bg-neutral-400 hover:bg-neutral-500';
+      default: return 'bg-neutral-200 hover:bg-neutral-300';
     }
   };
 
-  if (loading || !taData) {
+  const handleAddSkill = () => {
+    if (newSkill.trim() && !skills.includes(newSkill.trim())) {
+      setSkills([...skills, newSkill.trim()]);
+      setNewSkill('');
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!taId) return;
+
+    setSaving(true);
+    try {
+      const maxHours = Math.round((workload[0] / 100) * 15 + 5);
+      
+      const payload = {
+        skills,
+        max_hours: maxHours,
+        course_interests: courseInterests
+      };
+
+      const response = await fetch(`http://localhost:8000/api/tas/${taId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save profile');
+      }
+
+      const updatedData = await response.json();
+      setTaData(updatedData);
+      alert('Profile saved successfully!');
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      alert('Failed to save profile. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading || !taData || courses.length === 0) {
     return <div>Loading...</div>;
   }
 
@@ -110,10 +168,20 @@ export default function TAProfileStudent({ taId }: TAProfileStudentProps) {
               </Badge>
             ))}
           </div>
-          <Button variant="outline" size="sm">
-            <Plus className="w-4 h-4 mr-1" />
-            Add Skill
-          </Button>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newSkill}
+              onChange={(e) => setNewSkill(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleAddSkill()}
+              placeholder="e.g., Python, Data Structures, React..."
+              className="flex-1 px-3 py-2 text-sm border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <Button variant="outline" size="sm" onClick={handleAddSkill}>
+              <Plus className="w-4 h-4 mr-1" />
+              Add Skill
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -144,21 +212,21 @@ export default function TAProfileStudent({ taId }: TAProfileStudentProps) {
         <CardContent>
           <div className="space-y-3">
             {courses.map(course => {
-              const interest = courseInterests[course.code] ?? null;
+              const interest = courseInterests[course.course_code] ?? null;
               return (
-                <div key={course.code} className="flex items-center justify-between py-3 px-4 bg-neutral-50 rounded-lg">
+                <div key={course.course_code} className="flex items-center justify-between py-3 px-4 bg-neutral-50 rounded-lg">
                   <div>
-                    <div className="text-sm text-neutral-900">{course.code}</div>
-                    <div className="text-xs text-neutral-500">{course.name}</div>
+                    <div className="text-sm text-neutral-900">{course.course_code}</div>
+                    <div className="text-xs text-neutral-500">{course.ps_lab_sections}</div>
                   </div>
                   <div className="flex gap-2">
-                    {(['high', 'medium', 'low'] as const).map(level => (
+                    {(['High', 'Medium', 'Low'] as const).map(level => (
                       <Button
                         key={level}
                         size="sm"
                         variant={interest === level ? 'default' : 'outline'}
                         className={interest === level ? getInterestColor(level) : ''}
-                        onClick={() => setCourseInterests(prev => ({ ...prev, [course.code]: level }))}
+                        onClick={() => setCourseInterests(prev => ({ ...prev, [course.course_code]: level }))}
                       >
                         {level.charAt(0).toUpperCase() + level.slice(1)}
                       </Button>
@@ -173,9 +241,9 @@ export default function TAProfileStudent({ taId }: TAProfileStudentProps) {
 
       {/* Save Button */}
       <div className="flex justify-end">
-        <Button size="lg" className="gap-2">
+        <Button size="lg" className="gap-2" onClick={handleSaveProfile} disabled={saving}>
           <Save className="w-4 h-4" />
-          Save Profile
+          {saving ? 'Saving...' : 'Save Profile'}
         </Button>
       </div>
     </div>

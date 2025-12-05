@@ -10,12 +10,12 @@ VALUES
 -- TAs
 INSERT IGNORE INTO ta (ta_id, name, program, level, background, admit_term, standing, notes, bs_school_program, ms_school_program, max_hours)
 VALUES
-    (1, 'Alex Thompson', 'CS', 'MS', 'Functional Programming', 'Fall 2023', 1, 'Prefers morning labs', 'CS', 'CS', 3),
-    (2, 'Jamie Lee', 'CS', 'MS', 'Databases', 'Fall 2022', 2, '', 'CS', 'CS', 3),
-    (3, 'Morgan Scott', 'CS', 'PhD', 'AI', 'Spring 2023', 1, '', 'CS', 'CS', 3),
-    (4, 'Casey Patel', 'CS', 'MS', 'Systems', 'Fall 2023', 2, 'Has TA experience', 'EE', 'CS', 3),
-    (5, 'Taylor Kim', 'CS', 'MS', 'Systems', 'Fall 2022', 1, '', 'CS', 'CS', 3),
-    (6, 'Jordan Miller', 'CS', 'MS', 'Systems', 'Spring 2023', 2, '', 'CS', 'CS', 3);
+    (1, 'Alex Thompson', 'CS', 'MS', 'Functional Programming', 'Fall 2023', 1, 'Prefers morning labs', 'CS', 'CS', 5),
+    (2, 'Jamie Lee', 'CS', 'MS', 'Databases', 'Fall 2022', 2, '', 'CS', 'CS', 5),
+    (3, 'Morgan Scott', 'CS', 'PhD', 'AI', 'Spring 2023', 1, '', 'CS', 'CS', 5),
+    (4, 'Casey Patel', 'CS', 'MS', 'Systems', 'Fall 2023', 2, 'Has TA experience', 'EE', 'CS', 5),
+    (5, 'Taylor Kim', 'CS', 'MS', 'Systems', 'Fall 2022', 1, '', 'CS', 'CS', 5),
+    (6, 'Jordan Miller', 'CS', 'MS', 'Systems', 'Spring 2023', 2, '', 'CS', 'CS', 5);
 
 -- COURSES
 INSERT IGNORE INTO course (course_id, course_code, ps_lab_sections, enrollment_capacity, actual_enrollment, num_tas_requested, assigned_tas_count)
