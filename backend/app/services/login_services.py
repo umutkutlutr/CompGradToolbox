@@ -1,6 +1,7 @@
 from app.core.database import get_db_connection
+from typing import Optional, Dict
 
-def authenticate_user(username: str, password: str) -> dict | None:
+def authenticate_user(username: str, password: str) -> Optional[Dict]:
     """
     Check the user table for matching username/password.
     Return a dict with user info if valid, including actual name from ta or professor tables.

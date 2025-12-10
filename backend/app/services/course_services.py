@@ -1,12 +1,30 @@
 from app.core.database import get_db_connection
 from app.models import Course
+from typing import List
+from pydantic import BaseModel
+
+
+class CourseUpdate(BaseModel):
+    course_id: int
+    num_tas_requested: int
+    skills: List[str]
+
 
 def get_courses() -> list[Course]:
     with get_db_connection() as conn:
         cursor = conn.cursor(dictionary=True)
         cursor.execute("SELECT * FROM course")
         results = cursor.fetchall()
-        return [Course(**row) for row in results]
+
+        for course in results:
+            cursor.execute(
+                "SELECT skill FROM course_skill WHERE course_id = %s",
+                (course["course_id"],)
+            )
+            skill_rows = cursor.fetchall()
+            course["skills"] = [row["skill"] for row in skill_rows]
+
+        return results
     
 from app.core.database import get_db_connection
 from app.models import Course  # assuming Course model exists
@@ -72,3 +90,43 @@ def get_courses_by_professor_username(username: str) -> list[dict]:
     cursor.close()
     conn.close()
     return courses
+
+def update_course_in_db(data: CourseUpdate):
+    """
+    Updates:
+    - course.num_tas_requested
+    - course_skill table (removes old skills, inserts new)
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 1. Update num_tas_requested
+        cursor.execute("""
+            UPDATE course
+            SET num_tas_requested = %s
+            WHERE course_id = %s
+        """, (data.num_tas_requested, data.course_id))
+
+        # 2. Delete old skills
+        cursor.execute("""
+            DELETE FROM course_skill
+            WHERE course_id = %s
+        """, (data.course_id,))
+
+        # 3. Insert new skills
+        for skill in data.skills:
+            cursor.execute("""
+                INSERT INTO course_skill (course_id, skill)
+                VALUES (%s, %s)
+            """, (data.course_id, skill))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return {"message": "Course updated successfully"}
+
+    except Exception as e:
+        print("Error updating course:", e)
+        raise

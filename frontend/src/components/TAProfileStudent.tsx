@@ -32,12 +32,23 @@ export default function TAProfileStudent({ taId }: TAProfileStudentProps) {
   const [workload, setWorkload] = useState([50]);
   const [courseInterests, setCourseInterests] = useState<Record<string, CourseInterestLevel>>({});
   const [saving, setSaving] = useState(false);
+  const [availableSkills, setAvailableSkills] = useState<string[]>([]);
 
   // Fetch courses
   useEffect(() => {
-    fetch('http://localhost:8000/courses/') // make sure the full path is correct
+    fetch('http://localhost:8000/courses/')
       .then(res => res.json())
-      .then((data: Course[]) => setCourses(data))
+      .then((data: Course[]) => {
+        setCourses(data);
+
+        // Extract ALL distinct skills from all courses
+        const allSkills = new Set<string>();
+        data.forEach(course => {
+          course.skills?.forEach(skill => allSkills.add(skill));
+        });
+
+        setAvailableSkills(Array.from(allSkills));
+      })
       .catch(err => console.error('Error fetching courses:', err));
   }, []);
 
@@ -158,6 +169,8 @@ export default function TAProfileStudent({ taId }: TAProfileStudentProps) {
           <CardDescription>Add relevant courses, programming languages, and technical skills</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+
+          {/* Current Skills */}
           <div className="flex flex-wrap gap-2 p-4 border border-neutral-200 rounded-lg min-h-[100px]">
             {skills.map((skill, index) => (
               <Badge key={index} variant="outline" className="gap-1 bg-blue-50 text-blue-700 border-blue-200">
@@ -168,40 +181,31 @@ export default function TAProfileStudent({ taId }: TAProfileStudentProps) {
               </Badge>
             ))}
           </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newSkill}
-              onChange={(e) => setNewSkill(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleAddSkill()}
-              placeholder="e.g., Python, Data Structures, React..."
-              className="flex-1 px-3 py-2 text-sm border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <Button variant="outline" size="sm" onClick={handleAddSkill}>
-              <Plus className="w-4 h-4 mr-1" />
-              Add Skill
-            </Button>
-          </div>
+
+          {/* Available Skills from all courses */}
+          {availableSkills.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Available Skills (Click to Add)</Label>
+              <div className="flex flex-wrap gap-2 p-3 border rounded-lg bg-neutral-50">
+                {availableSkills
+                  .filter(skill => !skills.includes(skill))
+                  .map((skill, index) => (
+                    <Badge
+                      key={index}
+                      variant="outline"
+                      className="gap-1 cursor-pointer border-blue-300 text-blue-700 hover:bg-blue-100"
+                      onClick={() => setSkills(prev => [...prev, skill])}
+                    >
+                      {skill}
+                      <Plus className="w-3 h-3 ml-1" />
+                    </Badge>
+                  ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Workload Preference */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Workload Preference</CardTitle>
-          <CardDescription>How many hours per week are you willing to commit?</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-neutral-600">Low (5 hrs/week)</span>
-              <span className="text-neutral-900">{Math.round((workload[0] / 100) * 15 + 5)} hrs/week</span>
-              <span className="text-neutral-600">High (20 hrs/week)</span>
-            </div>
-            <Slider value={workload} onValueChange={setWorkload} max={100} step={1} className="w-full" />
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Course Preferences */}
       <Card>

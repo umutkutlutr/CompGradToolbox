@@ -12,12 +12,13 @@ import {
   SelectValue,
 } from './ui/select';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from './ui/sheet';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "./ui/dialog";
+
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 
@@ -41,9 +42,11 @@ interface Course {
 export default function TAAssignmentFaculty({ userName }: TAAssignmentFacultyProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTerm, setSelectedTerm] = useState('fall-2025');
-  const [editingCourse, setEditingCourse] = useState<string | null>(null);
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [skills, setSkills] = useState<string[]>([]);
+  const [numTAs, setnumTAs] = useState(0);
 
   useEffect(() => {
   const fetchCourses = async () => {
@@ -77,6 +80,29 @@ export default function TAAssignmentFaculty({ userName }: TAAssignmentFacultyPro
 
   fetchCourses();
   }, [userName]);
+
+    async function updateCourseInDB(updated: Course) {
+    try {
+      const response = await fetch("http://127.0.0.1:8000/courses/update", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          course_id: Number(updated.id),
+          num_tas_requested: updated.requiredTAs,
+          skills: updated.skills,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update course");
+      }
+
+      return await response.json();
+    } catch (err) {
+      console.error("Update error:", err);
+    }
+  }
+
 
 
   const getStatusBadge = (requiredTAs: number, assignedTAs: string[]) => {
@@ -185,7 +211,7 @@ export default function TAAssignmentFaculty({ userName }: TAAssignmentFacultyPro
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setEditingCourse(course.id)}
+                        onClick={() => {setEditingCourse(course), setSkills(course.skills), setnumTAs(course.requiredTAs);}}
                       >
                         <Edit className="w-4 h-4 mr-1" />
                         Edit
@@ -200,59 +226,63 @@ export default function TAAssignmentFaculty({ userName }: TAAssignmentFacultyPro
       </Card>
 
       {/* Edit Preferences Sheet */}
-      <Sheet open={editingCourse !== null} onOpenChange={() => setEditingCourse(null)}>
-        <SheetContent className="sm:max-w-md overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Edit TA Preferences</SheetTitle>
-            <SheetDescription>
-              Set your requirements and preferences for TA assignments
-            </SheetDescription>
-          </SheetHeader>
+      <Dialog open={editingCourse !== null} onOpenChange={() => setEditingCourse(null)}>
+        <DialogContent
+          className="sm:max-w-md max-h-[90vh] overflow-y-auto border-4 border-red-500">
+          <DialogHeader>
+            <DialogTitle>Edit TA Preferences {editingCourse?.code} {editingCourse?.name}</DialogTitle>
+            <DialogDescription>
+              Set your requirements and preferences for TA assignments.
+            </DialogDescription>
+          </DialogHeader>
 
           <div className="space-y-6 mt-6">
             {/* Number of TAs */}
             <div className="space-y-2">
               <Label htmlFor="num-tas">Number of TAs Needed</Label>
-              <Input id="num-tas" type="number" defaultValue="2" />
-            </div>
-
-            {/* Hard Constraints */}
-            <div className="space-y-2">
-              <Label>Hard Constraints</Label>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" id="grade-req" className="rounded" />
-                  <label htmlFor="grade-req" className="text-sm text-neutral-700">
-                    Must have passed course with A- or above
-                  </label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" id="no-conflict" className="rounded" />
-                  <label htmlFor="no-conflict" className="text-sm text-neutral-700">
-                    No time conflicts with course schedule
-                  </label>
-                </div>
-              </div>
-            </div>
+          <Input
+            id="num-tas"
+            type="number"
+            value={numTAs}
+            onChange={(e) => setnumTAs(Number(e.target.value))}
+          />            
+          </div>
 
             {/* Preferred Skills */}
             <div className="space-y-2">
-              <Label htmlFor="skills">Preferred Skills (tags)</Label>
-              <div className="flex flex-wrap gap-2 p-3 border border-neutral-200 rounded-lg min-h-[80px]">
-                <Badge variant="outline" className="gap-1">
-                  Functional Programming
-                  <X className="w-3 h-3 cursor-pointer" />
-                </Badge>
-                <Badge variant="outline" className="gap-1">
-                  Scala
-                  <X className="w-3 h-3 cursor-pointer" />
-                </Badge>
-                <Badge variant="outline" className="gap-1">
-                  OCaml
-                  <X className="w-3 h-3 cursor-pointer" />
-                </Badge>
+              <Label>Preferred Skills (tags)</Label>
+              <div className="flex flex-wrap gap-2 p-3 border rounded-lg min-h-[80px]">
+                {skills.length === 0 && (
+                  <p className="text-neutral-400 text-sm">No skills added.</p>
+                )}
+
+                {skills.map((skill, i) => (
+                  <Badge key={i} variant="outline" className="gap-1 pointer-events-auto">
+                    {skill}
+                    <span className="pointer-events-auto">
+                      <X
+                        className="w-3 h-3 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSkills(prev => prev.filter((_, idx) => idx !== i));
+                        }}
+                      />
+                    </span>
+
+                  </Badge>
+
+                ))}
               </div>
-              <Button variant="outline" size="sm" className="w-full">
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  const newSkill = prompt("Enter a new skill:");
+                  if (newSkill) setSkills((prev) => [...prev, newSkill]);
+                }}
+              >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Skill
               </Button>
@@ -270,19 +300,40 @@ export default function TAAssignmentFaculty({ userName }: TAAssignmentFacultyPro
 
             {/* Actions */}
             <div className="flex gap-3 pt-4">
-              <Button onClick={() => setEditingCourse(null)} className="flex-1">
-                Save Preferences
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setEditingCourse(null)}
-              >
+            <Button
+              className="flex-1"
+              onClick={async () => {
+                if (!editingCourse) return;
+
+                const updated = {
+                  ...editingCourse,
+                  requiredTAs: numTAs,
+                  skills: skills,
+                };
+
+                // 1. Update backend
+                await updateCourseInDB(updated);
+
+                // 2. Update local state
+                setCourses(prev =>
+                  prev.map(c => (c.id === updated.id ? updated : c))
+                );
+
+                // 3. Close modal
+                setEditingCourse(null);
+              }}
+            >
+              Save Preferences
+            </Button>
+
+              <Button variant="outline" onClick={() => setEditingCourse(null)}>
                 Cancel
               </Button>
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
