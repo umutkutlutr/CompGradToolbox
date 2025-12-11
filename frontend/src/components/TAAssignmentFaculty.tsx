@@ -24,6 +24,7 @@ import { Textarea } from './ui/textarea';
 
 interface TAAssignmentFacultyProps {
   userName: string;
+  Name: string;
 }
 
 type CourseStatus = 'assigned' | 'partial' | 'unassigned';
@@ -39,7 +40,7 @@ interface Course {
 }
 
 
-export default function TAAssignmentFaculty({ userName }: TAAssignmentFacultyProps) {
+export default function TAAssignmentFaculty({ Name, userName }: TAAssignmentFacultyProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTerm, setSelectedTerm] = useState('fall-2025');
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
@@ -83,7 +84,7 @@ export default function TAAssignmentFaculty({ userName }: TAAssignmentFacultyPro
 
     async function updateCourseInDB(updated: Course) {
     try {
-      const response = await fetch("http://127.0.0.1:8000/courses/update", {
+      const response = await fetch(`http://127.0.0.1:8000/courses/update?user=${encodeURIComponent(Name)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -268,7 +269,6 @@ export default function TAAssignmentFaculty({ userName }: TAAssignmentFacultyPro
                         }}
                       />
                     </span>
-
                   </Badge>
 
                 ))}

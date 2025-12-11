@@ -137,3 +137,10 @@ CREATE TABLE weights (
     workload_balance FLOAT NOT NULL
 );
 
+CREATE TABLE activity_log (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  action VARCHAR(255) NOT NULL,
+  user VARCHAR(100),
+  type ENUM('success','warning','info') DEFAULT 'info',
+  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+);

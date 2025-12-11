@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react';
-import { Play, Download, Info } from 'lucide-react';
+import { Play, Download, Info, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Slider } from './ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from './ui/sheet';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "./ui/dialog";
+
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import {
@@ -25,6 +26,7 @@ import {
 interface CourseAssignment {
   code: string;
   name: string;
+  professor: string;
   tas: string[];
   violations: string;
 }
@@ -37,20 +39,37 @@ interface TAAssignment {
 }
 
 interface TAAssignmentCoordinatorProps {
+  name: string;
   onNavigate: (page: string) => void;
 }
 
-export default function TAAssignmentCoordinator({ onNavigate }: TAAssignmentCoordinatorProps) {
+export default function TAAssignmentCoordinator({ name, onNavigate }: TAAssignmentCoordinatorProps) {
   const [skillWeight, setSkillWeight] = useState([70]);
   const [facultyPrefWeight, setFacultyPrefWeight] = useState([60]);
   const [taPrefWeight, setTaPrefWeight] = useState([50]);
   const [workloadWeight, setWorkloadWeight] = useState([80]);
 
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState<any>(null);
+
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState<CourseAssignment | null>(null);
+
+  const [tasToRemove, setTasToRemove] = useState<string[]>([]);
+  const [tasToAdd, setTasToAdd] = useState<string[]>([]);
+
+  const allTANames = result?.workloads ? Object.keys(result.workloads) : [];
+
+  const availableTAsForSelectedCourse =
+    selectedCourse && result?.workloads
+      ? allTANames.filter((taName) => !selectedCourse.tas.includes(taName))
+      : [];
+
+
+
+
 
   // =====================================
   // FETCH WEIGHTS
@@ -72,6 +91,27 @@ export default function TAAssignmentCoordinator({ onNavigate }: TAAssignmentCoor
     fetchWeights();
   }, []);
 
+  // =====================================
+// FETCH SAVED ASSIGNMENTS ON REFRESH
+// =====================================
+useEffect(() => {
+  const fetchSaved = async () => {
+    try {
+      const res = await fetch("/api/get-assignments");
+      const data = await res.json();
+
+      if (data && Object.keys(data.assignments || {}).length > 0) {
+        setResult(data);
+      }
+    } catch (err) {
+      console.error("Failed to load saved assignments", err);
+    }
+  };
+
+  fetchSaved();
+}, []);
+
+  
   const saveWeights = async () => {
     try {
       const payload = {
@@ -90,18 +130,62 @@ export default function TAAssignmentCoordinator({ onNavigate }: TAAssignmentCoor
     }
   };
 
+
+  // =====================================
+  // Override any ta changes with modal
+  // =====================================
+  const saveOverride = async () => {
+    if (!selectedCourse) return;
+
+    try {
+      const payload = {
+        course_code: selectedCourse.code,
+        remove_tas: tasToRemove,   
+        add_tas: tasToAdd,    
+        user: name,     
+      };
+
+      const res = await fetch("/api/override-assignment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("Failed to save override");
+
+      // Refresh assignments
+      const updated = await fetch("/api/get-assignments");
+      const updatedData = await updated.json();
+      setResult(updatedData);
+
+      // Close modal and reset UI state
+      setDetailsOpen(false);
+      setTasToRemove([]);
+      setTasToAdd([]);
+      setSelectedCourse(null);
+
+    } catch (err) {
+      console.error("Error saving override:", err);
+    }
+  };
+
+
+
   // =====================================
   // RUN ASSIGNMENT ALGORITHM
   // =====================================
   const runAssignment = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/run-assignment");
-      const data = await res.json();
+      await fetch(`/api/run-assignment?user=Admin`);
 
+      const saved = await fetch("/api/get-assignments");
+      const savedData = await saved.json();
+
+      setResult(savedData);
       saveWeights();
-      setResult(data);  // SHOW RESULTS IN SAME PAGE
-      console.log("Assignment result:", data);
+
+      console.log("Updated assignment result:", savedData);
     } catch (err) {
       console.error("Failed to run assignment", err);
     } finally {
@@ -109,14 +193,17 @@ export default function TAAssignmentCoordinator({ onNavigate }: TAAssignmentCoor
     }
   };
 
+
+
   // =====================================
   // DERIVE STRUCTURES FROM RESULT
   // =====================================
   const assignmentsByCourse: CourseAssignment[] = result
-    ? Object.entries(result.assignments).map(([courseCode, tas]) => ({
+    ? Object.entries(result.assignments).map(([courseCode, info]) => ({
         code: courseCode,
         name: courseCode,
-        tas: tas as string[],
+        professor: info.professor,
+        tas: info.tas,
         violations: "none",
       }))
     : [];
@@ -125,17 +212,44 @@ export default function TAAssignmentCoordinator({ onNavigate }: TAAssignmentCoor
     ? Object.entries(result.workloads).map(([taName, load]) => ({
         name: taName,
         courses: Object.entries(result.assignments)
-          .filter(([_, tas]) => (tas as string[]).includes(taName))
+          .filter(([courseCode, info]) => info.tas.includes(taName))
           .map(([courseCode]) => courseCode),
         load: load as number,
         maxLoad: 20,
       }))
     : [];
 
-  const handleViewDetails = (course: any) => {
+      // Handle View Details -> Opening Modal
+    const handleViewDetails = (course: CourseAssignment) => {
     setSelectedCourse(course);
+    setTasToRemove([]);
+    setTasToAdd([]);
     setDetailsOpen(true);
-  };
+    };
+
+    //helpers for toggle and removal
+    const toggleRemoveTA = (taName: string) => {
+      setTasToRemove((prev) =>
+        prev.includes(taName)
+          ? prev.filter((t) => t !== taName)
+          : [...prev, taName]
+      );
+    };
+
+    const toggleAddTA = (taName: string) => {
+      setTasToAdd((prev) =>
+        prev.includes(taName)
+          ? prev.filter((t) => t !== taName)
+          : [...prev, taName]
+      );
+    };
+
+    console.log("Received name in TAAssignmentCoordinator:", name);
+
+
+
+
+
 
   // =====================================
   // MAIN UI RENDER
@@ -243,14 +357,14 @@ export default function TAAssignmentCoordinator({ onNavigate }: TAAssignmentCoor
               <TabsContent value="by-course">
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4">Course</th>
-                        <th className="text-left py-3 px-4">Assigned TAs</th>
-                        <th className="text-left py-3 px-4">Status</th>
-                        <th className="text-left py-3 px-4">Actions</th>
-                      </tr>
-                    </thead>
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-4">Course</th>
+                      <th className="text-left py-3 px-4">Professor</th>
+                      <th className="text-left py-3 px-4">Assigned TAs</th>
+                      <th className="text-left py-3 px-4">Actions</th>
+                    </tr>
+                  </thead>
                     <tbody>
                       {assignmentsByCourse.map(course => (
                         <tr key={course.code} className="border-b hover:bg-neutral-50">
@@ -260,7 +374,12 @@ export default function TAAssignmentCoordinator({ onNavigate }: TAAssignmentCoor
                             <div className="font-medium">{course.code}</div>
                             <div className="text-xs text-neutral-500">{course.name}</div>
                           </td>
-
+                          {/* Professor */}
+                          <td className="py-4 px-4">
+                            <span className="inline-block px-2 py-1 rounded-md text-blue-700 bg-blue-50 border border-blue-200 text-sm font-sm">
+                              {course.professor}
+                            </span>
+                          </td>
                           {/* TAs */}
                           <td className="py-4 px-4">
                             <div className="flex flex-wrap gap-1">
@@ -269,12 +388,6 @@ export default function TAAssignmentCoordinator({ onNavigate }: TAAssignmentCoor
                               ))}
                             </div>
                           </td>
-
-                          {/* Status */}
-                          <td className="py-4 px-4">
-                            <Badge className="bg-green-100 text-green-700 border-green-200">OK</Badge>
-                          </td>
-
                           {/* Actions */}
                           <td className="py-4 px-4">
                             <Button size="sm" variant="ghost" onClick={() => handleViewDetails(course)}>
@@ -352,79 +465,140 @@ export default function TAAssignmentCoordinator({ onNavigate }: TAAssignmentCoor
       </Card>
 
       {/* DETAILS SHEET */}
-      <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <SheetContent className="sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Assignment Details</SheetTitle>
-            <SheetDescription>
-              {selectedCourse?.code} — {selectedCourse?.name}
-            </SheetDescription>
-          </SheetHeader>
+      {/* DETAILS MODAL */}
+      <Dialog open={detailsOpen} onOpenChange={(open) => {
+          setDetailsOpen(open);
+          if (!open) {
+            setSelectedCourse(null);
+            setTasToRemove([]);
+            setTasToAdd([]);
+          }
+        }}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Assignment Details</DialogTitle>
+            <DialogDescription>
+              {selectedCourse
+                ? `${selectedCourse.code} — ${selectedCourse.name} (Professor: ${selectedCourse.professor})`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
 
-          <div className="space-y-6 mt-6">
+          {selectedCourse && (
+            <div className="space-y-6 mt-6">
 
-            {/* Assigned TAs */}
-            <div className="space-y-4">
-              <h4 className="text-sm font-medium text-neutral-900">Assigned TAs</h4>
-
-              {selectedCourse?.tas?.map((ta: string, index: number) => (
-                <div key={index} className="p-4 bg-neutral-50 rounded-lg space-y-2">
-                  <div className="font-medium">{ta}</div>
-                  <div className="text-xs text-neutral-600">
-                    Strong skill match; meets workload and schedule constraints.
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Manual Override */}
-            <div className="space-y-3 border-t pt-4">
-              <h4 className="text-sm font-medium text-neutral-900">Manual Override</h4>
-
+              {/* Assigned TAs with removable X */}
               <div className="space-y-3">
+                <h4 className="text-sm font-medium text-neutral-900">Assigned TAs</h4>
 
-                <div>
-                  <Label>Replace TA</Label>
-                  <Select>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Select TA to replace" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {selectedCourse?.tas?.map((ta: string, i: number) => (
-                        <SelectItem key={i} value={ta}>{ta}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {selectedCourse.tas.length === 0 && (
+                  <p className="text-xs text-neutral-500">No TAs assigned yet.</p>
+                )}
+
+                <div className="space-y-2">
+                  {selectedCourse.tas.map((ta) => {
+                    const marked = tasToRemove.includes(ta);
+                    return (
+                      <div
+                        key={ta}
+                        className="flex items-center justify-between rounded-md border px-3 py-2 bg-neutral-50"
+                      >
+                        <div className="flex flex-col">
+                          <span
+                            className={
+                              "text-sm " +
+                              (marked ? "line-through text-neutral-400" : "text-neutral-900")
+                            }
+                          >
+                            {ta}
+                          </span>
+                          {marked && (
+                            <span className="text-[10px] uppercase tracking-wide text-red-500">
+                              Marked for removal
+                            </span>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleRemoveTA(ta)}
+                          className="inline-flex items-center justify-center rounded-full border border-red-200 bg-red-50 p-1 hover:bg-red-100"
+                        >
+                          <X className="w-3 h-3 text-red-600" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-
-                <div>
-                  <Label>With TA</Label>
-                  <Select>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Select new TA" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pat-wilson">Pat Wilson</SelectItem>
-                      <SelectItem value="chris-brown">Chris Brown</SelectItem>
-                      <SelectItem value="sam-davis">Sam Davis</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label>Reason for Override</Label>
-                  <Textarea rows={3} placeholder="Explain why override is needed..." />
-                </div>
-
-                <Button className="w-full">Save Override</Button>
               </div>
 
-            </div>
+              {/* Available TAs to assign */}
+              <div className="space-y-3 border-t pt-4">
+                <h4 className="text-sm font-medium text-neutral-900">Available TAs to Assign</h4>
 
-          </div>
-        </SheetContent>
-      </Sheet>
+                {availableTAsForSelectedCourse.length === 0 && (
+                  <p className="text-xs text-neutral-500">
+                    No additional TAs available for assignment.
+                  </p>
+                )}
+
+                <div className="space-y-2">
+                  {availableTAsForSelectedCourse.map((taName) => {
+                    const currentLoad = result.workloads?.[taName] ?? 0;
+                    const maxLoad = 20;
+                    const percentage = Math.round((currentLoad / maxLoad) * 100);
+                    const selected = tasToAdd.includes(taName);
+
+                    return (
+                      <button
+                        key={taName}
+                        type="button"
+                        onClick={() => toggleAddTA(taName)}
+                        className={
+                          "w-full text-left rounded-md border px-3 py-2 bg-white hover:bg-neutral-50 transition " +
+                          (selected ? "border-blue-400 ring-1 ring-blue-300" : "border-neutral-200")
+                        }
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium text-neutral-900">
+                            {taName}
+                          </span>
+                          <span className="text-xs text-neutral-500">
+                            {currentLoad} / {maxLoad} hrs ({percentage}%)
+                          </span>
+                        </div>
+
+                        <div className="w-full bg-neutral-200 h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className="h-1.5 rounded-full bg-blue-600"
+                            style={{ width: `${Math.min(100, percentage)}%` }}
+                          />
+                        </div>
+
+                        {selected && (
+                          <div className="mt-1 text-[10px] uppercase tracking-wide text-blue-600">
+                            Selected to assign
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* (Stub) Save button – hook to backend later */}
+              <div className="pt-4">
+                <Button className="w-full" onClick={saveOverride}>
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
 
     </div>
+    
   );
 }

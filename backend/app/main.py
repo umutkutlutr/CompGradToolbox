@@ -8,6 +8,9 @@ from app.routes import professors
 from app.routes import weight
 from app.routes import login
 from app.routes import course
+from app.routes import dashboard
+from app.routes import activity_log
+
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -21,6 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
 app.include_router(login.router, prefix="/api", tags=["Login"])
 app.include_router(algorithm.router, prefix="/api", tags=["Algorithm"])
 app.include_router(algorithm_excel.router, prefix="/api", tags=["Algorithm, Excel"])
@@ -29,6 +33,7 @@ app.include_router(tas.router, prefix="/api", tags=["TAs"])
 app.include_router(professors.router, prefix="/api", tags=["Professors"])
 app.include_router(weight.router, prefix="/api/weights", tags=["Weights"])
 app.include_router(course.router, prefix="/courses", tags=["courses"])
+app.include_router(activity_log.router, prefix="/api", tags=["Logs"])
 
 
 

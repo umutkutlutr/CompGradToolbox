@@ -3,11 +3,18 @@ import { UserRole } from '../App';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
+import { useEffect, useState } from 'react';
 
 interface DashboardProps {
   name: string;
   userRole: UserRole;
   onNavigate: (page: string) => void;
+}
+interface ActivityLog {
+  action: string;
+  user: string;
+  type: "success" | "warning" | "info";
+  minutes_ago: number;
 }
 
 export default function Dashboard({ name, userRole, onNavigate }: DashboardProps) {
@@ -23,6 +30,41 @@ export default function Dashboard({ name, userRole, onNavigate }: DashboardProps
         return 'User';
     }
   };
+
+  const [summary, setSummary] = useState({
+    courses: 0,
+    assigned: 0,
+    unassigned: 0,
+  });
+  const [activity, setActivity] = useState<ActivityLog[]>([]);
+
+
+  useEffect(() => {
+    const fetchSummary = async () => {
+      try {
+        const res = await fetch("/api/dashboard");
+        const data = await res.json();
+        setSummary(data);
+      } catch (err) {
+        console.error("Failed to load dashboard summary:", err);
+      }
+    };
+    fetchSummary();
+  }, []);
+  useEffect(() => {
+    const fetchActivity = async () => {
+      try {
+        const res = await fetch("/api/logs");
+        const data = await res.json();
+        setActivity(data);
+      } catch (err) {
+        console.error("Failed to load activity logs:", err);
+      }
+    };
+    fetchActivity();
+  }, []);
+
+
 
   const recentActivity = [
     {
@@ -86,15 +128,15 @@ export default function Dashboard({ name, userRole, onNavigate }: DashboardProps
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <div className="text-2xl text-neutral-900">12</div>
+                  <div className="text-2xl text-neutral-900">{summary.courses}</div>
                   <div className="text-sm text-neutral-500">Courses this term</div>
                 </div>
                 <div>
-                  <div className="text-2xl text-green-600">28</div>
+                  <div className="text-2xl text-green-600">{summary.assigned}</div>
                   <div className="text-sm text-neutral-500">TAs assigned</div>
                 </div>
                 <div>
-                  <div className="text-2xl text-amber-600">4</div>
+                  <div className="text-2xl text-amber-600">{summary.unassigned}</div>
                   <div className="text-sm text-neutral-500">Unassigned positions</div>
                 </div>
               </div>
@@ -224,27 +266,22 @@ export default function Dashboard({ name, userRole, onNavigate }: DashboardProps
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {recentActivity.map((activity, index) => (
-                  <div key={index} className="flex gap-3">
-                    <div className="flex-shrink-0 mt-1">
-                      {activity.type === 'success' && (
-                        <CheckCircle2 className="w-4 h-4 text-green-600" />
-                      )}
-                      {activity.type === 'warning' && (
-                        <AlertCircle className="w-4 h-4 text-amber-600" />
-                      )}
-                      {activity.type === 'info' && (
-                        <Clock className="w-4 h-4 text-blue-600" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-neutral-900">{activity.action}</div>
-                      <div className="text-xs text-neutral-500 mt-0.5">
-                        {activity.user} • {activity.time}
-                      </div>
+              {activity.map((item, index) => (
+                <div key={index} className="flex gap-3">
+                  <div className="flex-shrink-0 mt-1">
+                    {item.type === 'success' && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                    {item.type === 'warning' && <AlertCircle className="w-4 h-4 text-amber-600" />}
+                    {item.type === 'info' && <Clock className="w-4 h-4 text-blue-600" />}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-neutral-900">{item.action}</div>
+                    <div className="text-xs text-neutral-500 mt-0.5">
+                      {item.user} • {item.minutes_ago} min ago
                     </div>
                   </div>
-                ))}
+                </div>
+              ))}
               </div>
             </CardContent>
           </Card>

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException
 from app.services.assignmentAlgorithm import run_assignment_algorithm, updateDB
 from app.services.assignment_excel import generate_ta_assignments
+from app.services.assignment_service import get_saved_assignments, override_assignment
 import tempfile
 import os
 import logging
@@ -64,3 +65,28 @@ async def run_assignment_excel(file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Error running Excel assignment: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.get("/get-assignments")
+def fetch_assignments():
+    """
+    Returns:
+    - assignments by course
+    - workloads computed as number of assigned courses
+    """
+
+    try:
+        result = get_saved_assignments()
+        return result
+
+    except Exception as e:
+        print("Error fetching assignments:", e)
+        raise HTTPException(status_code=500, detail="Failed to fetch assignment results")
+    
+@router.post("/override-assignment")
+def override_assignment_route(payload: dict):
+    try:
+        result = override_assignment(payload)
+        return result
+    except Exception as e:
+        print("Error overriding assignment:", e)
+        raise HTTPException(status_code=500, detail="Failed to override assignment")

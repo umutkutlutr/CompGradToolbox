@@ -74,9 +74,9 @@ export default function App() {
         if (userRole === 'student') {
           return <TAProfileStudent taId={userId} />;
         } else if (userRole === 'admin') {
-          return <TAAssignmentCoordinator onNavigate={setCurrentPage} />;
+          return <TAAssignmentCoordinator name={name} onNavigate={setCurrentPage} />;
         }
-        return <TAAssignmentFaculty userName = {username} />;
+        return <TAAssignmentFaculty Name={name} userName = {username} />;
       case 'comp590':
         return <ReportChecker type="comp590" />;
       case 'comp291-391':
