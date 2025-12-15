@@ -1,5 +1,5 @@
   import { useState } from 'react';
-  import { Button, Input } from './ui/button';
+  import { Button } from './ui/button';
   import { GraduationCap } from 'lucide-react';
   import { UserRole } from '../App';
 
@@ -7,10 +7,19 @@
   type Name = string;
   type Username = string;
   interface LoginScreenProps {
-    onLogin: (role: UserRole, userId: number, name: Name, username: Username) => void;
+    onLogin: (
+      role: UserRole,
+      userId: number,
+      name: Name,
+      username: Username,
+      onboardingRequired: boolean
+    ) => void;
+    onGoRegister: () => void;
   }
 
-  export default function LoginScreen({ onLogin }: LoginScreenProps) {
+
+
+  export default function LoginScreen({ onLogin, onGoRegister }: LoginScreenProps) {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -26,7 +35,13 @@
         if (!res.ok) throw new Error(data.detail || 'Login failed');
 
         // Call parent with role and user_id
-        onLogin(data.user_type as UserRole, data.ta_id || data.professor_id || 0, data.name as Name, data.username as Username);
+      onLogin(
+        data.user_type,
+        data.ta_id || data.professor_id || 0,
+        data.name,
+        data.username,
+        data.onboarding_required
+      );
       } catch (err: any) {
         setError(err.message);
       }
@@ -60,6 +75,13 @@
             />
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <Button onClick={handleSubmit} className="w-full h-12 mt-2">Login</Button>
+            <Button
+                variant="outline"
+                onClick={onGoRegister}
+                className="w-full h-12"
+              >
+                Register
+            </Button>
           </div>
         </div>
       </div>

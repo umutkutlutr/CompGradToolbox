@@ -1,6 +1,7 @@
 import { use, useState } from 'react';
 import { Home, Users, FileCheck, Settings, BarChart3, Shield } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
+import RegisterScreen from './components/RegisterScreen';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import Dashboard from './components/Dashboard';
@@ -44,7 +45,8 @@ const navigationItems: NavigationItem[] = [
     ],
   },
 ];
-
+export type AuthPage = 'login' | 'register' | 'app';
+ 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>('faculty');
@@ -52,18 +54,38 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [userId, setUserId] = useState<number | null>(null);
   const [username, setUsername] = useState('');
+  const [authPage, setAuthPage] = useState<AuthPage>('login');
+  const [onboardingRequired, setOnboardingRequired] = useState(false);
 
-  const handleLogin = (role: UserRole, id: number, name: string, username: string) => {
+
+  const handleLogin = (
+    role: UserRole,
+    id: number,
+    name: string,
+    username: string,
+    onboardingRequiredFromBackend: boolean
+  ) => {
     setIsLoggedIn(true);
     setUserRole(role);
     setUserId(id);
     setName(name);
-    setUsername(username)
+    setUsername(username);
+    setOnboardingRequired(onboardingRequiredFromBackend);
+
+    if (onboardingRequiredFromBackend) {
+      setAuthPage("register");
+    } else {
+      setAuthPage("app");
+    }
   };
+
+
+
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     setCurrentPage('dashboard');
+    setAuthPage('login');
   };
 
   const renderContent = () => {
@@ -115,9 +137,20 @@ export default function App() {
     }
   };
 
-  if (!isLoggedIn) {
-    return <LoginScreen onLogin={handleLogin} />;
+  if (authPage !== 'app') {
+    return authPage === 'login' ? (
+      <LoginScreen
+        onLogin={handleLogin}
+        onGoRegister={() => setAuthPage('register')}
+      />
+    ) : (
+      <RegisterScreen
+        onBackToLogin={() => setAuthPage('login')}
+        onAutoLogin={handleLogin}
+      />
+    );
   }
+
 
   return (
     <div className="flex h-screen bg-neutral-50">

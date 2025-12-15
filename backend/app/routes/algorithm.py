@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.services.assignmentAlgorithm import run_assignment_algorithm, updateDB
 from app.services.activity_log_service import add_log
+import traceback
 
 router = APIRouter()
 
@@ -26,6 +27,8 @@ def run_assignment(user: str = "System"):
         return result
 
     except Exception as e:
+        traceback.print_exc()   # 🔑 THIS IS CRITICAL
+
         # Log failure
         add_log(
             action=f"TA assignment run failed: {str(e)}",

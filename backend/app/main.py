@@ -10,6 +10,11 @@ from app.routes import login
 from app.routes import course
 from app.routes import dashboard
 from app.routes import activity_log
+from app.routes import auth
+from app.routes import ta_onboarding, faculty_onboarding
+from app.routes import onboarding
+
+
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -34,6 +39,10 @@ app.include_router(professors.router, prefix="/api", tags=["Professors"])
 app.include_router(weight.router, prefix="/api/weights", tags=["Weights"])
 app.include_router(course.router, prefix="/courses", tags=["courses"])
 app.include_router(activity_log.router, prefix="/api", tags=["Logs"])
+app.include_router(auth.router, prefix="/api", tags=["Register"])
+app.include_router(ta_onboarding.router)
+app.include_router(faculty_onboarding.router)
+app.include_router(onboarding.router)
 
 
 

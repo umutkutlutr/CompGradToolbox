@@ -17,6 +17,22 @@ interface ActivityLog {
   minutes_ago: number;
 }
 
+function parseCourseUpdateLog(log: string) {
+  if (!log.startsWith("Updated course")) return null;
+
+  const courseMatch = log.match(/Updated course ([A-Z0-9]+)/i);
+  const taMatch = log.match(/TA requested = (\d+)/i);
+  const skillsMatch = log.match(/Skills = (.*)/i);
+
+  return {
+    course: courseMatch ? courseMatch[1] : null,
+    taRequested: taMatch ? taMatch[1] : null,
+    skills: skillsMatch ? skillsMatch[1].split(",").map(s => s.trim()) : []
+  };
+}
+
+
+
 export default function Dashboard({ name, userRole, onNavigate }: DashboardProps) {
   const getRoleLabel = () => {
     switch (userRole) {
@@ -266,22 +282,69 @@ export default function Dashboard({ name, userRole, onNavigate }: DashboardProps
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-              {activity.map((item, index) => (
-                <div key={index} className="flex gap-3">
-                  <div className="flex-shrink-0 mt-1">
-                    {item.type === 'success' && <CheckCircle2 className="w-4 h-4 text-green-600" />}
-                    {item.type === 'warning' && <AlertCircle className="w-4 h-4 text-amber-600" />}
-                    {item.type === 'info' && <Clock className="w-4 h-4 text-blue-600" />}
-                  </div>
+              {activity.map((item, index) => {
+                const parsed = parseCourseUpdateLog(item.action);
 
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-neutral-900">{item.action}</div>
-                    <div className="text-xs text-neutral-500 mt-0.5">
-                      {item.user} • {item.minutes_ago} min ago
+                return (
+                  <div key={index} className="flex gap-3">
+                    
+                    {/* ICON */}
+                    <div className="flex-shrink-0 mt-1">
+                      {item.type === 'success' && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                      {item.type === 'warning' && <AlertCircle className="w-4 h-4 text-amber-600" />}
+                      {item.type === 'info' && <Clock className="w-4 h-4 text-blue-600" />}
+                    </div>
+
+                    {/* DEFAULT FORMAT OR SPECIAL FORMAT */}
+                    <div className="flex-1 min-w-0">
+                      {!parsed ? (
+                        // 🟦 ORIGINAL FORMAT (UNTOUCHED)
+                        <>
+                          <div className="text-sm text-neutral-900">{item.action}</div>
+                          <div className="text-xs text-neutral-500 mt-0.5">
+                            {item.user} • {item.time}
+                          </div>
+                        </>
+                      ) : (
+                        // 🟪 SPECIAL RENDER FOR COURSE UPDATE LOGS
+                        <>
+                          <div className="text-sm text-neutral-900">
+                            Updated course 
+                            <span className="ml-1 font-semibold text-blue-600">{parsed.course}</span>
+                          </div>
+
+                          <div className="text-xs text-neutral-500 mt-0.5">
+                            {item.user} • {item.time}
+                          </div>
+
+                          {/* TA REQUESTED */}
+                          {parsed.taRequested && (
+                            <div className="mt-2">
+                              <span className="px-2 py-1 bg-blue-100 text-blue-700 border border-blue-200 rounded text-xs">
+                                TA Requested: {parsed.taRequested}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* SKILL BADGES */}
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {parsed.skills.map((skill, i) => (
+                              <span
+                                key={i}
+                                className="px-2 py-1 bg-purple-100 text-purple-700 border border-purple-200 rounded text-xs"
+                              >
+                                Skill: {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
+
+
               </div>
             </CardContent>
           </Card>
