@@ -94,6 +94,19 @@
     --color-neutral-600: oklch(.439 0 0);
     --color-neutral-700: oklch(.371 0 0);
     --color-neutral-900: oklch(.205 0 0);
+    --color-emerald-50: oklch(.982 .018 155.826);
+    --color-emerald-100: oklch(.962 .044 156.743);
+    --color-emerald-200: oklch(.925 .084 155.995);
+    --color-emerald-600: oklch(.627 .194 149.214);
+    --color-emerald-700: oklch(.527 .154 150.069);
+    --color-emerald-900: oklch(.266 .065 152.934);
+    --color-rose-50: oklch(.981 .014 16.655);
+    --color-rose-100: oklch(.941 .03 12.58);
+    --color-rose-200: oklch(.892 .058 10.001);
+    --color-rose-600: oklch(.592 .245 6.31);
+    --color-rose-700: oklch(.514 .222 7.52);
+    --color-rose-900: oklch(.284 .104 10.25);
+
     --color-black: #000;
     --color-white: #fff;
     --spacing: .25rem;
@@ -1446,6 +1459,10 @@
   .whitespace-nowrap {
     white-space: nowrap;
   }
+
+  .pill-high { border-color: var(--color-green-200); background: var(--color-green-50); color: var(--color-green-700); }
+  .pill-med  { border-color: var(--color-amber-200); background: var(--color-amber-50); color: var(--color-amber-900); }
+  .pill-low  { border-color: var(--color-red-100); background: var(--color-red-100); color: var(--color-red-600); }
 
   .text-amber-600 {
     color: var(--color-amber-600);

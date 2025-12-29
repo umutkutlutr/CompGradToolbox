@@ -1,5 +1,5 @@
 import { use, useState } from 'react';
-import { Home, Users, FileCheck, Settings, BarChart3, Shield, BookOpen } from 'lucide-react';
+import { Home, Users, FileCheck, Settings, BarChart3, Shield, BookOpen, UserPenIcon } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 import RegisterScreen from './components/RegisterScreen';
 import Sidebar from './components/Sidebar';
@@ -15,6 +15,7 @@ import PeopleDirectory from './components/PeopleDirectory';
 import TAAssignmentResult from './components/TAAssignmentResult';
 import FacultyProfile  from './components/FacultyProfile';
 import TACourses from './components/TACourses';
+import ProfilePage from './components/ProfilePage';
 
 export type UserRole = 'faculty' | 'student' | 'admin';
 
@@ -27,7 +28,8 @@ export type NavigationItem = {
 
 const navigationItems: NavigationItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: Home },
-  { id: 'profile', label: 'My Courses', icon: BookOpen },
+  // { id: 'profile', label: 'My Courses', icon: BookOpen },
+  { id: 'profile', label: 'Profile', icon: UserPenIcon },
   { id: 'ta-assignment', label: 'TA Assignment', icon: Users },
   {
     id: 'report-checkers',
@@ -87,6 +89,36 @@ const handleLogin = (
 
 
 
+  const sidebarItems: NavigationItem[] = [
+      { id: 'dashboard', label: 'Dashboard', icon: Home },
+
+      { id: 'profile', label: 'Profile', icon: UserPenIcon },
+
+      ...(userRole === 'faculty'
+        ? [{ id: 'faculty-courses', label: 'Courses', icon: BookOpen } as NavigationItem]
+        : []),
+
+      { id: 'ta-assignment', label: 'TA Assignment', icon: Users },
+
+      {
+        id: 'report-checkers',
+        label: 'Report Checkers',
+        icon: FileCheck,
+        children: [
+          { id: 'comp590', label: 'COMP590 Seminar' },
+          { id: 'comp291-391', label: 'COMP291/391 Internship' },
+        ],
+      },
+      {
+        id: 'admin',
+        label: 'Admin & Settings',
+        icon: Settings,
+        children: [
+          { id: 'rules-weights', label: 'Rules & Weights' },
+          { id: 'audit-logs', label: 'Audit Logs' },
+        ],
+      },
+    ];
 
 
   const handleLogout = () => {
@@ -99,6 +131,10 @@ const handleLogin = (
     switch (currentPage) {
       case 'dashboard':
           return <Dashboard name={name} userRole={userRole} username={username} onNavigate={setCurrentPage} />;
+
+      case 'faculty-courses':
+          return <FacultyProfile username={username} />;
+
       case 'ta-assignment':
         if (userRole === 'student') {
           return <TAProfileStudent taId={taId} />;
@@ -118,12 +154,19 @@ const handleLogin = (
         return <PeopleDirectory />;
       case 'ta-assignment-result':
         return <TAAssignmentResult />;
-
       case 'profile':
-        if (userRole === 'faculty')
-          return <FacultyProfile username={username} />;
-        if (userRole === 'student')
-          return <TACourses username={username} />;
+        return (
+          <ProfilePage
+            userRole={userRole}
+            userId={userId}
+            username={username}
+            onNameUpdated={setName}
+          />
+        );      // case 'profile':
+      //   if (userRole === 'faculty')
+      //     return <FacultyProfile username={username} />;
+      //   if (userRole === 'student')
+      //     return <TACourses username={username} />;
       default:
         return <Dashboard name={name} username={username} userRole={userRole} onNavigate={setCurrentPage} />;
     }
@@ -145,6 +188,8 @@ const handleLogin = (
         return 'Rules & Weights Configuration';
       case 'audit-logs':
         return 'Audit Logs';
+      case 'faculty-courses':
+        return 'My Courses';
       default:
         return 'Dashboard';
     }
@@ -168,7 +213,7 @@ const handleLogin = (
   return (
     <div className="flex h-screen bg-neutral-50">
       <Sidebar
-        navigationItems={navigationItems}
+        navigationItems={sidebarItems}
         currentPage={currentPage}
         onNavigate={setCurrentPage}
       />

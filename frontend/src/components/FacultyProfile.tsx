@@ -5,6 +5,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 import { toast, Toaster } from "sonner";
+import EditCourseDialog from "./EditCourseDialog";
 import {
   Dialog,
   DialogContent,
@@ -51,6 +52,10 @@ export default function FacultyProfile({ username }: FacultyProfileProps) {
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [skillInput, setSkillInput] = useState("");
   const [skillSelect, setSkillSelect] = useState<string>("");
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [courseToEdit, setCourseToEdit] = useState<Course | null>(null);
+
 
   const existingSkills = useMemo(() => {
     const all = courses.flatMap(c => c.skills ?? []);
@@ -297,7 +302,11 @@ const openCourseDetails = async (courseId: number) => {
                     <div
                     key={course.course_id}
                     className="border rounded-xl p-4 bg-white cursor-pointer hover:bg-neutral-50 transition"
-                    onClick={() => openCourseDetails(course.course_id)}
+                    onClick={(e) => {
+                            e.stopPropagation();
+                            setCourseToEdit(course);
+                            setEditOpen(true);
+                        }}
                     >
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                         {/* LEFT */}
@@ -493,93 +502,27 @@ const openCourseDetails = async (courseId: number) => {
             </div>
         </DialogContent>
         </Dialog>
-        <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-            <DialogContent className="w-[90vw] max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                <DialogTitle>
-                    {detailsLoading ? "Loading..." : courseDetails?.course_code ?? "Course"}
-                </DialogTitle>
-                <DialogDescription>Course information & skills</DialogDescription>
-                </DialogHeader>
 
-                {detailsLoading || !courseDetails ? (
-                <div className="text-sm text-neutral-500">Fetching course details…</div>
-                ) : (
-                <div className="space-y-5 mt-2">
-                    {/* Professors */}
-                    <div>
-                    <div className="text-xs text-neutral-500 mb-1">Professor(s)</div>
-                    <div className="text-sm text-neutral-900">
-                        {(courseDetails.professors ?? []).length
-                        ? (courseDetails.professors ?? []).join(", ")
-                        : "—"}
-                    </div>
-                    </div>
+            <EditCourseDialog
+                    open={editOpen}
+                    onClose={() => {
+                        setEditOpen(false);
+                        setCourseToEdit(null);
+                    }}
+                    existingSkills={existingSkills}
+                    course={courseToEdit}
+                    username={username}
+                    onSaved={(updated) => {
+                        setCourses((prev) =>
+                        prev.map((c) =>
+                            c.course_id === courseToEdit?.course_id
+                            ? { ...c, ...updated }
+                            : c
+                        )
+                        );
+                    }}
+                    />
 
-                    {/* Assigned TAs */}
-                    <div>
-                    <div className="text-xs text-neutral-500 mb-1">Assigned TAs</div>
-                    {(courseDetails.assignedTAs ?? []).length ? (
-                        <div className="flex flex-wrap gap-2">
-                        {(courseDetails.assignedTAs ?? []).map((n) => (
-                            <span
-                            key={n}
-                            className="px-2 py-1 bg-teal-100 text-teal-700 border border-teal-200 rounded text-xs"
-                            >
-                            {n}
-                            </span>
-                        ))}
-                        </div>
-                    ) : (
-                        <div className="text-sm text-neutral-500">No TAs assigned yet.</div>
-                    )}
-                    </div>
-
-                    {/* Skills (editable) */}
-                    <div>
-                    <div className="text-xs text-neutral-500 mb-2">Skills required</div>
-
-                    <div className="flex flex-wrap gap-2 p-3 border border-neutral-200 rounded-lg min-h-[52px]">
-                        {editSkills.length === 0 ? (
-                        <span className="text-sm text-neutral-400">No skills added</span>
-                        ) : (
-                        editSkills.map((s) => (
-                            <span
-                            key={s}
-                            className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 border border-purple-200 rounded text-xs"
-                            >
-                            {s}
-                            <X className="w-3 h-3 cursor-pointer" onClick={() => removeDetailSkill(s)} />
-                            </span>
-                        ))
-                        )}
-                    </div>
-
-                    <div className="flex gap-2 mt-2">
-                        <Input
-                        value={detailSkillInput}
-                        onChange={(e) => setDetailSkillInput(e.target.value)}
-                        placeholder="Add skill (e.g., Python)"
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                            e.preventDefault();
-                            addDetailSkill();
-                            }
-                        }}
-                        />
-                        <Button variant="outline" onClick={addDetailSkill} type="button">
-                        Add
-                        </Button>
-                    </div>
-
-                    <Button className="w-full mt-3" onClick={saveSkills}>
-                        Save Skills
-                    </Button>
-                    </div>
-                </div>
-                )}
-            </DialogContent>
-            </Dialog>
 
     </div>
   );

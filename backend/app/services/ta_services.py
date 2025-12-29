@@ -132,37 +132,62 @@ def get_ta_by_id(ta_id: int):
     conn.close()
     return ta
 
-def update_ta(ta_id: int, skills: list[str], max_hours: int, course_interests: dict[str, str]):
-    """
-    Update TA information: skills, max_hours, and course interests.
-    """
+from app.core.database import get_db_connection
+
+from typing import Optional, List, Dict
+
+def update_ta(
+    ta_id: int,
+    name: Optional[str],
+    skills: List[str],
+    max_hours: Optional[int],
+    course_interests: Dict[str, Optional[str]],
+    preferred_professor_ids: List[int],
+):
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
-        # 1. Update max_hours
-        cursor.execute("UPDATE ta SET max_hours = %s WHERE ta_id = %s", (max_hours, ta_id))
+        if name is not None:
+            cursor.execute("UPDATE ta SET name = %s WHERE ta_id = %s", (name, ta_id))
+        if max_hours is not None:
+            cursor.execute("UPDATE ta SET max_hours = %s WHERE ta_id = %s", (max_hours, ta_id))
 
-        # 2. Update skills
         cursor.execute("DELETE FROM ta_skill WHERE ta_id = %s", (ta_id,))
         for skill in skills:
-            cursor.execute("INSERT INTO ta_skill (ta_id, skill) VALUES (%s, %s)", (ta_id, skill))
+            cursor.execute(
+                "INSERT INTO ta_skill (ta_id, skill) VALUES (%s, %s)",
+                (ta_id, skill),
+            )
 
-        # 3. Update course interests
+        cursor.execute("DELETE FROM ta_preferred_professor WHERE ta_id = %s", (ta_id,))
+        for pid in preferred_professor_ids:
+            cursor.execute(
+                "INSERT INTO ta_preferred_professor (ta_id, professor_id) VALUES (%s, %s)",
+                (ta_id, pid),
+            )
+
         for course_code, interest in course_interests.items():
-            # Get course_id from course_code
             cursor.execute("SELECT course_id FROM course WHERE course_code = %s", (course_code,))
             row = cursor.fetchone()
             if not row:
-                continue  # skip if course not found
+                continue
             course_id = row[0]
 
-            if interest is not None:
-                cursor.execute("""
+            if interest is None:
+                cursor.execute(
+                    "DELETE FROM ta_preferred_course WHERE ta_id = %s AND course_id = %s",
+                    (ta_id, course_id),
+                )
+            else:
+                cursor.execute(
+                    """
                     INSERT INTO ta_preferred_course (course_id, ta_id, interest_level)
                     VALUES (%s, %s, %s)
                     ON DUPLICATE KEY UPDATE interest_level = VALUES(interest_level)
-                """, (course_id, ta_id, interest))
+                    """,
+                    (course_id, ta_id, interest),
+                )
 
         conn.commit()
     except Exception as e:

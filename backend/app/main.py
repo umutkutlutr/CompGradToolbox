@@ -13,6 +13,8 @@ from app.routes import activity_log
 from app.routes import auth
 from app.routes import ta_onboarding, faculty_onboarding
 from app.routes import onboarding
+from app.routes import skills
+from app.routes import ta_assignments
 
 
 
@@ -43,6 +45,9 @@ app.include_router(auth.router, prefix="/api", tags=["Register"])
 app.include_router(ta_onboarding.router)
 app.include_router(faculty_onboarding.router)
 app.include_router(onboarding.router)
+app.include_router(skills.router, prefix="/api", tags=["Skills"])
+app.include_router(ta_assignments.router, prefix="/api", tags=["Assignment"])
+
 
 
 

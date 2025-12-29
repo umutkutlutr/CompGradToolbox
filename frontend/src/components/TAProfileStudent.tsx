@@ -1,255 +1,280 @@
-import { useState, useEffect } from 'react';
-import { Plus, X, Save } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
-import { Label } from './ui/label';
-import { Slider } from './ui/slider';
+import { useState, useEffect, useMemo } from "react";
+import { Search, Info } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "./ui/dialog";
 
 type TAProfileStudentProps = {
   taId: number | null;
 };
 
-type Course = {
+const API = "http://127.0.0.1:8000";
+
+type AssignmentRow = {
+  assignment_id: number;
   course_id: number;
   course_code: string;
-  ps_lab_sections: string;
-  enrollment_capacity: number;
-  actual_enrollment: number;
-  num_tas_requested: number;
-  assigned_tas_count: number;
-  skills: string[];
+  professors: string[];
+  required_skills: string[];
 };
 
-type CourseInterestLevel = 'High' | 'Medium' | 'Low' | null;
-
 export default function TAProfileStudent({ taId }: TAProfileStudentProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTerm, setSelectedTerm] = useState("fall-2025");
+
   const [loading, setLoading] = useState(true);
-  const [taData, setTaData] = useState<any>(null);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [skills, setSkills] = useState<string[]>([]);
-  const [newSkill, setNewSkill] = useState('');
-  const [workload, setWorkload] = useState([50]);
-  const [courseInterests, setCourseInterests] = useState<Record<string, CourseInterestLevel>>({});
-  const [saving, setSaving] = useState(false);
-  const [availableSkills, setAvailableSkills] = useState<string[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
+  const [selectedAssignment, setSelectedAssignment] = useState<AssignmentRow | null>(null);
 
-  // Fetch courses
   useEffect(() => {
-    fetch('http://localhost:8000/courses/')
-      .then(res => res.json())
-      .then((data: Course[]) => {
-        setCourses(data);
-
-        // Extract ALL distinct skills from all courses
-        const allSkills = new Set<string>();
-        data.forEach(course => {
-          course.skills?.forEach(skill => allSkills.add(skill));
-        });
-
-        setAvailableSkills(Array.from(allSkills));
-      })
-      .catch(err => console.error('Error fetching courses:', err));
-  }, []);
-
-  // Fetch TA data after courses are loaded
-  useEffect(() => {
-    if (!taId || courses.length === 0) return;
-
-    setLoading(true);
-    fetch(`http://localhost:8000/api/tas/${taId}`)
-      .then(res => res.json())
-      .then(data => {
-        setTaData(data);
-        setSkills(data.skills || []);
-        const sliderVal = data.max_hours ? Math.round(((data.max_hours - 5) / 15) * 100) : 50;
-        setWorkload([sliderVal]);
-
-        // Initialize course interests for all courses
-        const interests: Record<string, CourseInterestLevel> = {};
-        courses.forEach(course => {
-          interests[course.course_code] = data.course_interests?.[course.course_code] ?? null;
-        });
-        setCourseInterests(interests);
-      })
-      .catch(err => console.error('Error fetching TA data:', err))
-      .finally(() => setLoading(false));
-  }, [taId, courses]);
-
-  const getInterestColor = (interest: string) => {
-    switch (interest) {
-      case 'High': return 'bg-green-600 hover:bg-green-700';
-      case 'Medium': return 'bg-amber-600 hover:bg-amber-700';
-      case 'Low': return 'bg-neutral-400 hover:bg-neutral-500';
-      default: return 'bg-neutral-200 hover:bg-neutral-300';
-    }
-  };
-
-  const handleAddSkill = () => {
-    if (newSkill.trim() && !skills.includes(newSkill.trim())) {
-      setSkills([...skills, newSkill.trim()]);
-      setNewSkill('');
-    }
-  };
-
-  const handleSaveProfile = async () => {
     if (!taId) return;
 
-    setSaving(true);
-    try {
-      const maxHours = Math.round((workload[0] / 100) * 15 + 5);
-      
-      const payload = {
-        skills,
-        max_hours: maxHours,
-        course_interests: courseInterests
-      };
+    const fetchAssignments = async () => {
+      try {
+        setLoading(true);
 
-      const response = await fetch(`http://localhost:8000/api/tas/${taId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
+        // ✅ You need to implement this endpoint (backend snippet below)
+        const res = await fetch(`${API}/api/ta-assignments/by-ta?ta_id=${taId}`);
+        if (!res.ok) throw new Error("Failed to fetch TA assignments");
 
-      if (!response.ok) {
-        throw new Error('Failed to save profile');
+        const data = await res.json();
+
+        const normalized: AssignmentRow[] = (data ?? []).map((x: any) => ({
+          assignment_id: Number(x.assignment_id),
+          course_id: Number(x.course_id),
+          course_code: x.course_code ?? "Unknown",
+          professors: x.professors ?? [],
+          required_skills: x.required_skills ?? [],
+        }));
+
+        setAssignments(normalized);
+      } catch (e) {
+        console.error(e);
+        setAssignments([]);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      const updatedData = await response.json();
-      setTaData(updatedData);
-      alert('Profile saved successfully!');
-    } catch (error) {
-      console.error('Error saving profile:', error);
-      alert('Failed to save profile. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  };
+    fetchAssignments();
+  }, [taId]);
 
-  if (loading || !taData || courses.length === 0) {
-    return <div>Loading...</div>;
-  }
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return assignments;
+
+    return assignments.filter((a) => {
+      const courseMatch = a.course_code.toLowerCase().includes(q);
+      const profMatch = (a.professors ?? []).some((p) => p.toLowerCase().includes(q));
+      const skillMatch = (a.required_skills ?? []).some((s) => s.toLowerCase().includes(q));
+      return courseMatch || profMatch || skillMatch;
+    });
+  }, [assignments, searchQuery]);
+
+  const hasAssignments = assignments.length > 0;
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      {/* Personal Info */}
+    <div className="space-y-6">
+      {/* Filters */}
       <Card>
-        <CardHeader>
-          <CardTitle>Personal Information</CardTitle>
-          <CardDescription>Your basic profile details (read-only)</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-xs text-neutral-500">Full Name</Label>
-              <div className="text-sm text-neutral-900 mt-1">{taData.name}</div>
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative border rounded">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                <Input
+                  placeholder="Search by course, professor, or skill..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
             </div>
-            <div>
-              <Label className="text-xs text-neutral-500">Program</Label>
-              <div className="text-sm text-neutral-900 mt-1">{taData.program}</div>
+
+            <div className="w-full md:w-48">
+              <Select value={selectedTerm} onValueChange={setSelectedTerm}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fall-2025">Fall 2025</SelectItem>
+                  <SelectItem value="winter-2026">Winter 2026</SelectItem>
+                  <SelectItem value="summer-2025">Summer 2025</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div>
-              <Label className="text-xs text-neutral-500">Level</Label>
-              <div className="text-sm text-neutral-900 mt-1">{taData.level}</div>
-            </div>
-            <div>
-              <Label className="text-xs text-neutral-500">Max Hours/Week</Label>
-              <div className="text-sm text-neutral-900 mt-1">{taData.max_hours}</div>
-            </div>
+          </div>
+
+          <div className="mt-3 text-xs text-neutral-500">
+            This page shows your most recent TA assignment results.
           </div>
         </CardContent>
       </Card>
 
-      {/* Skills & Expertise */}
+      {/* Assignments Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Skills & Expertise</CardTitle>
-          <CardDescription>Add relevant courses, programming languages, and technical skills</CardDescription>
+          <CardTitle>My TA Assignments</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
 
-          {/* Current Skills */}
-          <div className="flex flex-wrap gap-2 p-4 border border-neutral-200 rounded-lg min-h-[100px]">
-            {skills.map((skill, index) => (
-              <Badge key={index} variant="outline" className="gap-1 bg-blue-50 text-blue-700 border-blue-200">
-                {skill}
-                <button onClick={() => setSkills(skills.filter((_, i) => i !== index))}>
-                  <X className="w-3 h-3 cursor-pointer hover:text-blue-900" />
-                </button>
-              </Badge>
-            ))}
-          </div>
+        <CardContent>
+          {loading ? (
+            <div className="text-sm text-neutral-600">Loading assignments…</div>
+          ) : !hasAssignments ? (
+            <div className="text-sm text-neutral-500">
+              No assignments yet. Once the coordinator runs the assignment algorithm, your assigned course(s) will appear here.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-neutral-200">
+                    <th className="text-left py-3 px-4 text-sm text-neutral-600">Course</th>
+                    <th className="text-left py-3 px-4 text-sm text-neutral-600">Professor(s)</th>
+                    <th className="text-left py-3 px-4 text-sm text-neutral-600">Required Skills</th>
+                    <th className="text-left py-3 px-4 text-sm text-neutral-600">Status</th>
+                    <th className="text-left py-3 px-4 text-sm text-neutral-600">Details</th>
+                  </tr>
+                </thead>
 
-          {/* Available Skills from all courses */}
-          {availableSkills.length > 0 && (
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Available Skills (Click to Add)</Label>
-              <div className="flex flex-wrap gap-2 p-3 border rounded-lg bg-neutral-50">
-                {availableSkills
-                  .filter(skill => !skills.includes(skill))
-                  .map((skill, index) => (
-                    <Badge
-                      key={index}
-                      variant="outline"
-                      className="gap-1 cursor-pointer border-blue-300 text-blue-700 hover:bg-blue-100"
-                      onClick={() => setSkills(prev => [...prev, skill])}
-                    >
-                      {skill}
-                      <Plus className="w-3 h-3 ml-1" />
-                    </Badge>
+                <tbody>
+                  {filtered.map((a) => (
+                    <tr key={a.assignment_id} className="border-b border-neutral-100 hover:bg-neutral-50">
+                      <td className="py-4 px-4">
+                        <div className="text-sm text-neutral-900">{a.course_code}</div>
+                        <div className="text-xs text-neutral-500">Assigned</div>
+                      </td>
+
+                      <td className="py-4 px-4">
+                        {a.professors.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {a.professors.map((p, i) => (
+                              <span
+                                key={i}
+                                className="inline-flex items-center bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs"
+                              >
+                                {p}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-neutral-400">Not set</span>
+                        )}
+                      </td>
+
+                      <td className="py-4 px-4">
+                        {a.required_skills.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {a.required_skills.slice(0, 3).map((s, i) => (
+                              <Badge key={i} variant="outline" className="text-xs">
+                                {s}
+                              </Badge>
+                            ))}
+                            {a.required_skills.length > 3 && (
+                              <Badge variant="outline" className="text-xs">
+                                +{a.required_skills.length - 3}
+                              </Badge>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-neutral-400">None</span>
+                        )}
+                      </td>
+
+                      <td className="py-4 px-4">
+                        <Badge className="bg-green-100 text-green-700 border-green-200">
+                          Assigned
+                        </Badge>
+                      </td>
+
+                      <td className="py-4 px-4">
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedAssignment(a)}>
+                          <Info className="w-4 h-4 mr-1" />
+                          View
+                        </Button>
+                      </td>
+                    </tr>
                   ))}
-              </div>
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>
       </Card>
 
+      {/* Details Dialog */}
+      <Dialog open={selectedAssignment !== null} onOpenChange={() => setSelectedAssignment(null)}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Assignment Details</DialogTitle>
+            <DialogDescription>
+              Course, professor(s), and required skills for your TA assignment.
+            </DialogDescription>
+          </DialogHeader>
 
-      {/* Course Preferences */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Course Preferences</CardTitle>
-          <CardDescription>Indicate your interest level for being a TA for each course</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {courses.map(course => {
-              const interest = courseInterests[course.course_code] ?? null;
-              return (
-                <div key={course.course_code} className="flex items-center justify-between py-3 px-4 bg-neutral-50 rounded-lg">
-                  <div>
-                    <div className="text-sm text-neutral-900">{course.course_code}</div>
-                    <div className="text-xs text-neutral-500">{course.ps_lab_sections}</div>
-                  </div>
-                  <div className="flex gap-2">
-                    {(['High', 'Medium', 'Low'] as const).map(level => (
-                      <Button
-                        key={level}
-                        size="sm"
-                        variant={interest === level ? 'default' : 'outline'}
-                        className={interest === level ? getInterestColor(level) : ''}
-                        onClick={() => setCourseInterests(prev => ({ ...prev, [course.course_code]: level }))}
-                      >
-                        {level.charAt(0).toUpperCase() + level.slice(1)}
-                      </Button>
-                    ))}
-                  </div>
+          {selectedAssignment && (
+            <div className="space-y-4 mt-4">
+              <div className="rounded-xl border bg-neutral-50 p-4">
+                <div className="text-xs text-neutral-500">Course</div>
+                <div className="text-sm font-medium text-neutral-900 mt-1">
+                  {selectedAssignment.course_code}
                 </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+              </div>
 
-      {/* Save Button */}
-      <div className="flex justify-end">
-        <Button size="lg" className="gap-2" onClick={handleSaveProfile} disabled={saving}>
-          <Save className="w-4 h-4" />
-          {saving ? 'Saving...' : 'Save Profile'}
-        </Button>
-      </div>
+              <div className="rounded-xl border bg-white p-4">
+                <div className="text-xs text-neutral-500">Professor(s)</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedAssignment.professors.length ? (
+                    selectedAssignment.professors.map((p, i) => (
+                      <Badge key={i} className="bg-blue-50 text-blue-700 border-blue-200">
+                        {p}
+                      </Badge>
+                    ))
+                  ) : (
+                    <div className="text-sm text-neutral-500">Not set</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-xl border bg-white p-4">
+                <div className="text-xs text-neutral-500">Required Skills</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedAssignment.required_skills.length ? (
+                    selectedAssignment.required_skills.map((s, i) => (
+                      <Badge key={i} variant="outline">
+                        {s}
+                      </Badge>
+                    ))
+                  ) : (
+                    <div className="text-sm text-neutral-500">No required skills listed</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button className="flex-1" onClick={() => setSelectedAssignment(null)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
