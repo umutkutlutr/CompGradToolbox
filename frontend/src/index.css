@@ -1111,6 +1111,10 @@
     border-style: dashed;
   }
 
+  .border-rose-200 {
+    border-color: var(--color-rose-200);
+  }
+
   .border-amber-200 {
     border-color: var(--color-amber-200);
   }
@@ -1149,6 +1153,14 @@
 
   .border-transparent {
     border-color: #0000;
+  }
+
+  .bg-rose-100 {
+    background-color: var(--color-rose-100);
+  }
+
+  .bg-rose-50 {
+    background-color: var(--color-rose-50);
   }
 
   .bg-amber-50 {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Play, Download, Info, X } from 'lucide-react';
+import { Play, Download, Info, X, Backpack } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -22,6 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
+
+import { AlertCircle } from 'lucide-react';
 
 interface CourseAssignment {
   code: string;
@@ -323,10 +325,21 @@ useEffect(() => {
               {loading ? "Running..." : "Run Assignment"}
             </Button>
 
-            <Button variant="outline" size="lg" className="gap-2">
+            <Button
+              variant="outline"
+              size="lg"
+              className="gap-2"
+              onClick={() => window.open("http://127.0.0.1:8000/api/export-assignments-xlsx", "_blank")}
+              disabled={!result}
+            >
               <Download className="w-4 h-4" />
               Export Results
             </Button>
+
+
+
+
+
           </div>
         </CardContent>
       </Card>
@@ -389,9 +402,10 @@ useEffect(() => {
                             </div>
                           </td>
                           {/* Actions */}
-                          <td className="py-4 px-4">
-                            <Button size="sm" variant="ghost" onClick={() => handleViewDetails(course)}>
-                              View Details
+                          <td className="py-4 px-4 ">
+                            <Button className="border rounded bg-amber-100 border-amber-200" size="sm" variant="ghost" onClick={() => handleViewDetails(course)}>
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              Edit
                             </Button>
                           </td>
 
@@ -602,3 +616,5 @@ useEffect(() => {
     
   );
 }
+
+
