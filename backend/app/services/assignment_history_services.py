@@ -14,44 +14,54 @@ def save_assignment_run_from_db(created_by: Optional[str] = None, notes: Optiona
             "INSERT INTO assignment_run (created_by, notes) VALUES (%s, %s)",
             (created_by, notes)
         )
-        run_id = cursor.lastrowid
+        run_id = int(cursor.lastrowid)
 
-        # Pull current state
+        # ----------------------------
+        # 1) Save courses (ONE row per course)
+        # Aggregate professors to avoid duplication for multi-prof courses
+        # ----------------------------
         cursor.execute("""
             SELECT
               c.course_id,
               c.course_code,
-              p.professor_id,
-              p.name AS professor_name,
-              t.ta_id,
-              t.name AS ta_name
+              -- pick a deterministic professor_id (min), and store all names concatenated
+              MIN(p.professor_id) AS professor_id,
+              GROUP_CONCAT(DISTINCT p.name ORDER BY p.name SEPARATOR ', ') AS professor_name
             FROM ta_assignment a
-            JOIN course c ON a.course_id = c.course_id
+            JOIN course c ON c.course_id = a.course_id
             LEFT JOIN course_professor cp ON cp.course_id = c.course_id
             LEFT JOIN professor p ON p.professor_id = cp.professor_id
-            JOIN ta t ON t.ta_id = a.ta_id
-            ORDER BY c.course_code, p.name, t.name;
+            GROUP BY c.course_id, c.course_code
+            ORDER BY c.course_code ASC
         """)
-        rows = cursor.fetchall()
+        course_rows = cursor.fetchall() or []
 
-        # Insert course rows once per course_code
-        seen_courses = set()
-        for r in rows:
-            cc = r["course_code"]
-            if cc in seen_courses:
-                continue
-            seen_courses.add(cc)
-
+        for r in course_rows:
             cursor.execute("""
                 INSERT INTO assignment_run_course
                   (run_id, course_id, course_code, professor_id, professor_name)
                 VALUES (%s, %s, %s, %s, %s)
-            """, (run_id, r["course_id"], cc, r["professor_id"], r["professor_name"]))
+            """, (run_id, r["course_id"], r["course_code"], r["professor_id"], r["professor_name"]))
 
-        # Insert TA rows
-        for r in rows:
+        # ----------------------------
+        # 2) Save TA pairs (NO professor join)
+        # One row per (course_code, ta_id)
+        # ----------------------------
+        cursor.execute("""
+            SELECT DISTINCT
+              c.course_code,
+              t.ta_id,
+              t.name AS ta_name
+            FROM ta_assignment a
+            JOIN course c ON c.course_id = a.course_id
+            JOIN ta t ON t.ta_id = a.ta_id
+            ORDER BY c.course_code ASC, t.name ASC
+        """)
+        pairs = cursor.fetchall() or []
+
+        for r in pairs:
             cursor.execute("""
-                INSERT INTO assignment_run_ta
+                INSERT IGNORE INTO assignment_run_ta
                   (run_id, course_code, ta_id, ta_name)
                 VALUES (%s, %s, %s, %s)
             """, (run_id, r["course_code"], r["ta_id"], r["ta_name"]))

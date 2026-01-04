@@ -132,6 +132,7 @@ def fetch_course_data() -> Dict[int, Dict[str, Any]]:
 
     cursor.close()
     conn.close()
+
     return course_map
 
 
@@ -425,41 +426,37 @@ def run_assignment_algorithm(max_same_prof: int = 2):
 
     return {"assignments": out_assignments, "workloads": workloads_by_name}
 
+import re
 
-# ----------------------------
-# DB update (accepts either course_code-based output OR course_id-based output)
-# ----------------------------
+def _name_key(s: str) -> str:
+    s = (s or "")
+    # remove weird whitespace / normalize
+    s = s.replace("\u00A0", " ").replace("\u200b", "").replace("\ufeff", "")
+    s = re.sub(r"\s+", " ", s).strip()
+    return s.casefold()
 
 def updateDB(assignments: Dict[str, Any]):
-    """
-    Supports TWO formats:
-
-    (A) UI-friendly format (what run_assignment_algorithm returns):
-        {
-          "COMP302": {"professor":"Safadi","tas":["Khalil","abed"], ...},
-          ...
-        }
-
-    (B) Raw format:
-        { course_id: [ta_id, ...], ... }
-
-    Writes into ta_assignment(ta_id, course_id)
-    """
-
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
         cursor.execute("TRUNCATE TABLE ta_assignment")
 
-        # Build TA name -> id map (for format A)
+        # Build TA normalized-name -> canonical id (smallest ta_id)
         tas_db = get_all_tas()
-        ta_name_to_id = {t["name"]: int(t["ta_id"]) for t in (tas_db or [])}
+        ta_key_to_id: Dict[str, int] = {}
+        for t in (tas_db or []):
+            k = _name_key(t["name"])
+            if not k:
+                continue
+            tid = int(t["ta_id"])
+            if k not in ta_key_to_id or tid < ta_key_to_id[k]:
+                ta_key_to_id[k] = tid
 
-        # Build course_code -> id map (for format A)
+        # Build course_code -> id
         cursor.execute("SELECT course_id, course_code FROM course")
         course_rows = cursor.fetchall() or []
-        course_code_to_id = {row[1]: int(row[0]) for row in course_rows}  # (course_id, course_code)
+        course_code_to_id = {row[1]: int(row[0]) for row in course_rows}
 
         # Detect format
         is_format_a = False
@@ -468,31 +465,69 @@ def updateDB(assignments: Dict[str, Any]):
                 is_format_a = True
             break
 
+        # Global guard against duplicates: (ta_id, course_id)
+        inserted_pairs = set()
+        skipped_duplicates = 0
+
         if is_format_a:
             for course_code, payload in assignments.items():
                 course_id = course_code_to_id.get(course_code)
                 if not course_id:
                     continue
 
+                # Per-course guard against duplicate *names*
+                seen_names: set[str] = set()
+
                 for ta_name in (payload.get("tas") or []):
-                    ta_id = ta_name_to_id.get(ta_name)
+                    name_key = _name_key(ta_name)
+                    if not name_key or name_key in seen_names:
+                        skipped_duplicates += 1
+                        continue
+                    seen_names.add(name_key)
+
+                    ta_id = ta_key_to_id.get(name_key)
                     if not ta_id:
                         continue
+
+                    pair = (int(ta_id), int(course_id))
+                    if pair in inserted_pairs:
+                        skipped_duplicates += 1
+                        continue
+                    inserted_pairs.add(pair)
+
                     cursor.execute(
                         "INSERT INTO ta_assignment (ta_id, course_id) VALUES (%s, %s)",
-                        (ta_id, course_id)
+                        (pair[0], pair[1])
                     )
+
         else:
+            # raw ids format
             for course_id, ta_ids in assignments.items():
                 cid = int(course_id)
+
+                seen_ids = set()
                 for ta_id in (ta_ids or []):
+                    tid = int(ta_id)
+                    if tid in seen_ids:
+                        skipped_duplicates += 1
+                        continue
+                    seen_ids.add(tid)
+
+                    pair = (tid, cid)
+                    if pair in inserted_pairs:
+                        skipped_duplicates += 1
+                        continue
+                    inserted_pairs.add(pair)
+
                     cursor.execute(
                         "INSERT INTO ta_assignment (ta_id, course_id) VALUES (%s, %s)",
-                        (int(ta_id), cid)
+                        (tid, cid)
                     )
 
         conn.commit()
         print("All assignments successfully updated in the database.")
+        if skipped_duplicates:
+            print(f"[INFO] Skipped {skipped_duplicates} duplicate assignment entries.")
 
     except Exception as e:
         conn.rollback()

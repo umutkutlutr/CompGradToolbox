@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.services.auth_service import start_registration
 from app.models import RegisterRequestModel
+import traceback
 
 router = APIRouter()
 
@@ -22,4 +23,5 @@ def register(data: RegisterRequestModel):
         raise HTTPException(status_code=400, detail=str(e))
 
     except Exception:
+        traceback.print_exc()  # prints full stack trace in terminal
         raise HTTPException(status_code=500, detail="Registration failed")

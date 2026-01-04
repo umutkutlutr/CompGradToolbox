@@ -17,6 +17,7 @@ import FacultyProfile  from './components/FacultyProfile';
 import TACourses from './components/TACourses';
 import ProfilePage from './components/ProfilePage';
 import AssignmentHistory from './components/AssignmentHistory';
+import { Toaster } from "sonner";
 
 
 export type UserRole = 'faculty' | 'student' | 'admin';
@@ -232,7 +233,9 @@ const handleLogin = (
 
 
   return (
+    
     <div className="flex h-screen bg-neutral-50">
+      <Toaster richColors position="top-right" />
       <Sidebar
         navigationItems={sidebarItems}
         currentPage={currentPage}
