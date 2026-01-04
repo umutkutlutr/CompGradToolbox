@@ -1,14 +1,28 @@
 # backend/app/services/assignmentAlgorithm.py
 # Course-based + professor-based hybrid assignment with "same professor cap" (2 by default)
 # Python 3.9 compatible (NO `|` union types)
+#
+# FAST GREEDY VERSION:
+# - Hard TA course limit (MAX_COURSES_PER_TA = 3)
+# - Caches weights ONCE (no repeated DB calls)
+# - Precomputes STATIC base scores for (TA, Course) once
+# - During greedy assignment, only recomputes the workload component
+# - Optional Top-K pruning per course to speed up further
 
-from itertools import product
 from typing import Dict, List, Any, Tuple, Optional
 
 from app.core.database import get_db_connection
 from .ta_services import get_all_tas
 from .professors_services import get_all_professors
 from .weight_services import get_weights
+
+
+# ----------------------------
+# Config
+# ----------------------------
+
+MAX_COURSES_PER_TA = 3
+TOP_K_PER_COURSE = 15  # set to None to disable pruning, or tune (10-25 is common)
 
 
 # ----------------------------
@@ -40,8 +54,15 @@ def safe_avg(xs: List[float]) -> float:
     return (sum(xs) / float(len(xs))) if xs else 0.0
 
 
+def workload_score(current_workload: float, avg_workload: float) -> float:
+    """Workload score normalized by the hard capacity (MAX_COURSES_PER_TA)."""
+    diff = abs(current_workload - avg_workload)
+    denom = float(max(MAX_COURSES_PER_TA, 1))
+    return max(0.0, 1.0 - (diff / denom))
+
+
 # ----------------------------
-# DB Fetchers (keep routes/services style; these are internal helpers)
+# DB Fetchers (internal helpers)
 # ----------------------------
 
 def fetch_course_data() -> Dict[int, Dict[str, Any]]:
@@ -149,31 +170,24 @@ def fetch_ta_course_interests() -> Dict[Tuple[int, int], str]:
 
 
 # ----------------------------
-# Scoring
+# Static base score (everything except workload)
 # ----------------------------
 
-def compute_course_pair_score(
+def compute_base_pair_score(
     ta: Dict[str, Any],
     course: Dict[str, Any],
     ta_pref_map: Dict[str, List[str]],
     prof_pref_map: Dict[str, List[str]],
     ta_skills_map: Dict[int, List[str]],
     ta_course_interest_map: Dict[Tuple[int, int], str],
-    current_workload: float,
-    avg_workload: float,
+    weights: Any,
 ) -> float:
     """
-    Hybrid score for (TA, Course):
-      - course_pref: course interest + skill match
-      - ta_pref: TA prefers professor(s) of the course
-      - prof_pref: professor(s) prefer TA
-      - workload_balance: avoid overloading
+    Base score for (TA, Course) excluding workload.
+    This is STATIC and can be precomputed once.
     """
-    weights = get_weights()
-
     ta_id = int(ta["ta_id"])
     ta_name = ta["name"]
-    ta_max_hours = max(int(ta.get("max_hours") or 1), 1)
 
     course_id = int(course["course_id"])
     course_profs = course.get("professors", []) or []
@@ -192,7 +206,6 @@ def compute_course_pair_score(
         matched = sum(1 for s in required if s in ta_skills)
         skill_score = matched / float(len(required))
 
-    # combine into one course_pref signal (tune if you want)
     course_pref_score = 0.6 * interest_score + 0.4 * skill_score
 
     # ---- professor preference (avg across course professors) ----
@@ -202,10 +215,10 @@ def compute_course_pair_score(
     else:
         ta_scores: List[float] = []
         prof_scores: List[float] = []
+        ta_list = ta_pref_map.get(ta_name, []) or []
+
         for p in course_profs:
             prof_name = p["name"]
-
-            ta_list = ta_pref_map.get(ta_name, []) or []
             prof_list = prof_pref_map.get(prof_name, []) or []
 
             ta_rank = ta_list.index(prof_name) if prof_name in ta_list else len(ta_list)
@@ -217,25 +230,20 @@ def compute_course_pair_score(
         ta_prof_score = safe_avg(ta_scores)
         prof_ta_score = safe_avg(prof_scores)
 
-    # ---- workload balance ----
-    workload_diff = abs(current_workload - avg_workload)
-    workload_score = max(0.0, 1.0 - (workload_diff / float(ta_max_hours)))
-
-    total = (
+    base = (
         float(weights.course_pref) * course_pref_score +
         float(weights.ta_pref) * ta_prof_score +
-        float(weights.prof_pref) * prof_ta_score +
-        float(weights.workload_balance) * workload_score
+        float(weights.prof_pref) * prof_ta_score
     )
-    return total
+    return base
 
 
 # ----------------------------
-# Main algorithm (course-based)
+# Main algorithm
 # ----------------------------
 
 def run_assignment_algorithm(max_same_prof: int = 2):
-    # ---- Load TAs (names + IDs + preferred professors) ----
+    # ---- Load TAs ----
     tas_db = get_all_tas()
     if not tas_db:
         return {"assignments": {}, "workloads": {}}
@@ -245,7 +253,6 @@ def run_assignment_algorithm(max_same_prof: int = 2):
         tas.append({
             "ta_id": int(t["ta_id"]),
             "name": t["name"],
-            "max_hours": int(t.get("max_hours") or 1),
             "preferred_professors": [p["name"] for p in (t.get("preferred_professors") or [])],
         })
 
@@ -258,7 +265,7 @@ def run_assignment_algorithm(max_same_prof: int = 2):
     # TA preference map by TA name
     ta_pref_map: Dict[str, List[str]] = {t["name"]: (t.get("preferred_professors") or []) for t in tas}
 
-    # ---- Load courses + skills + professors ----
+    # ---- Load courses ----
     courses_map = fetch_course_data()
     courses = list(courses_map.values())
     if not courses:
@@ -268,15 +275,15 @@ def run_assignment_algorithm(max_same_prof: int = 2):
     ta_skills_map = fetch_ta_skills()
     ta_course_interest_map = fetch_ta_course_interests()
 
-    # ---- Tracking structures ----
-    # course_id -> [ta_id...]
+    # ---- Load weights ONCE (critical for speed) ----
+    weights = get_weights()
+
+    # ---- Tracking ----
     assigned_by_course: Dict[int, List[int]] = {c["course_id"]: [] for c in courses}
-    # course_id -> remaining slots
     remaining_need: Dict[int, int] = {c["course_id"]: int(c.get("num_tas_requested") or 0) for c in courses}
-    # TA workloads (course-count units)
+
     ta_workload: Dict[int, int] = {t["ta_id"]: 0 for t in tas}
-    # TA capacity (course-count units)
-    ta_capacity: Dict[int, int] = {t["ta_id"]: max(int(t.get("max_hours") or 1), 1) for t in tas}
+    ta_capacity: Dict[int, int] = {t["ta_id"]: MAX_COURSES_PER_TA for t in tas}
 
     # course_id -> [professor_id...]
     course_prof_ids: Dict[int, List[int]] = {
@@ -291,7 +298,6 @@ def run_assignment_algorithm(max_same_prof: int = 2):
         pids = course_prof_ids.get(course_id, []) or []
         if not pids:
             return True
-        # If ANY professor on that course already hit the cap with this TA, block in pass 1
         for pid in pids:
             if ta_prof_count.get((ta_id, pid), 0) >= max_same_prof:
                 return False
@@ -302,57 +308,103 @@ def run_assignment_algorithm(max_same_prof: int = 2):
             key = (ta_id, pid)
             ta_prof_count[key] = ta_prof_count.get(key, 0) + 1
 
-    # ---- Precompute avg workload target ----
+    # ---- Demand/capacity and avg workload ----
     total_slots = sum(max(0, int(c.get("num_tas_requested") or 0)) for c in courses)
+    total_capacity = len(tas) * MAX_COURSES_PER_TA
+    if total_slots > total_capacity:
+        print(f"[WARN] Demand {total_slots} exceeds total TA capacity {total_capacity}. Some slots will remain unfilled.")
+
     avg_workload = float(total_slots) / float(len(tas)) if len(tas) > 0 else 0.0
 
-    # ---- Build candidate list (score, ta_id, course_id) ----
-    candidates: List[Tuple[float, int, int]] = []
+    # ---- Precompute BASE scores (static) ----
+    base_score: Dict[Tuple[int, int], float] = {}
     for c in courses:
+        cid = c["course_id"]
         need = int(c.get("num_tas_requested") or 0)
         if need <= 0:
             continue
         for t in tas:
-            s = compute_course_pair_score(
+            tid = t["ta_id"]
+            base_score[(tid, cid)] = compute_base_pair_score(
                 ta=t,
                 course=c,
                 ta_pref_map=ta_pref_map,
                 prof_pref_map=prof_pref_map,
                 ta_skills_map=ta_skills_map,
                 ta_course_interest_map=ta_course_interest_map,
-                current_workload=float(ta_workload[t["ta_id"]]),
-                avg_workload=avg_workload,
+                weights=weights,
             )
-            candidates.append((s, t["ta_id"], c["course_id"]))
 
-    candidates.sort(key=lambda x: x[0], reverse=True)
+    # ---- Optional Top-K pruning per course (based on base score only) ----
+    # candidates_by_course[cid] = [(tid, base_score), ...] sorted desc, truncated to K
+    candidates_by_course: Dict[int, List[Tuple[int, float]]] = {}
+    for c in courses:
+        cid = c["course_id"]
+        need = int(c.get("num_tas_requested") or 0)
+        if need <= 0:
+            continue
 
-    def try_assign(pass_enforce_cap: bool) -> None:
-        # Greedy over the same sorted candidates list
-        for score, ta_id, course_id in candidates:
-            if remaining_need.get(course_id, 0) <= 0:
+        lst: List[Tuple[int, float]] = []
+        for t in tas:
+            tid = t["ta_id"]
+            lst.append((tid, base_score.get((tid, cid), 0.0)))
+
+        lst.sort(key=lambda x: x[1], reverse=True)
+
+        if TOP_K_PER_COURSE is None:
+            candidates_by_course[cid] = lst
+        else:
+            candidates_by_course[cid] = lst[:max(1, int(TOP_K_PER_COURSE))]
+
+    def pick_best_pair(pass_enforce_cap: bool) -> Optional[Tuple[int, int, float]]:
+        """
+        Choose the best feasible (ta_id, course_id) under constraints.
+        Score = base_score + workload_balance_weight * workload_score(current_workload).
+        """
+        best: Optional[Tuple[int, int, float]] = None
+
+        for c in courses:
+            cid = c["course_id"]
+            if remaining_need.get(cid, 0) <= 0:
                 continue
-            if ta_workload.get(ta_id, 0) >= ta_capacity.get(ta_id, 1):
-                continue
-            if ta_id in assigned_by_course[course_id]:
-                continue
 
-            if pass_enforce_cap and not can_assign_with_cap(ta_id, course_id):
-                continue
+            for tid, b in (candidates_by_course.get(cid) or []):
+                if ta_workload.get(tid, 0) >= ta_capacity.get(tid, 1):
+                    continue
+                if tid in assigned_by_course[cid]:
+                    continue
+                if pass_enforce_cap and not can_assign_with_cap(tid, cid):
+                    continue
 
-            assigned_by_course[course_id].append(ta_id)
-            remaining_need[course_id] -= 1
-            ta_workload[ta_id] += 1
-            apply_prof_count(ta_id, course_id)
+                s = b + float(weights.workload_balance) * workload_score(
+                    current_workload=float(ta_workload.get(tid, 0)),
+                    avg_workload=avg_workload,
+                )
 
-    # PASS 1: strict cap (your request)
-    try_assign(pass_enforce_cap=True)
+                if best is None or s > best[2]:
+                    best = (tid, cid, s)
 
-    # PASS 2: relax cap only if needed (avoid leaving courses unfilled)
+        return best
+
+    def greedy_fill(pass_enforce_cap: bool) -> None:
+        while True:
+            best = pick_best_pair(pass_enforce_cap=pass_enforce_cap)
+            if best is None:
+                break
+            tid, cid, _s = best
+            assigned_by_course[cid].append(tid)
+            remaining_need[cid] -= 1
+            ta_workload[tid] += 1
+            apply_prof_count(tid, cid)
+
+    # PASS 1: strict professor cap
+    greedy_fill(pass_enforce_cap=True)
+
+    # PASS 2: relax cap if needed to fill remaining needs
     if any(v > 0 for v in remaining_need.values()):
-        try_assign(pass_enforce_cap=False)
+        greedy_fill(pass_enforce_cap=False)
 
-    # ---- Build UI-friendly output keyed by course_code ----
+    # ---- Output ----
     ta_id_to_name = {t["ta_id"]: t["name"] for t in tas}
 
     out_assignments: Dict[str, Dict[str, Any]] = {}
@@ -360,7 +412,6 @@ def run_assignment_algorithm(max_same_prof: int = 2):
         cid = c["course_id"]
         code = c["course_code"]
 
-        # show first professor name (or "—")
         prof_names = [p["name"] for p in (c.get("professors") or [])]
         display_prof = prof_names[0] if prof_names else "—"
 
@@ -410,8 +461,7 @@ def updateDB(assignments: Dict[str, Any]):
         course_rows = cursor.fetchall() or []
         course_code_to_id = {row[1]: int(row[0]) for row in course_rows}  # (course_id, course_code)
 
-        # Detect which format we got
-        # If keys look like course codes (strings like "COMP302") and values are dicts with "tas", assume A.
+        # Detect format
         is_format_a = False
         for k, v in assignments.items():
             if isinstance(k, str) and isinstance(v, dict) and "tas" in v:
@@ -419,7 +469,6 @@ def updateDB(assignments: Dict[str, Any]):
             break
 
         if is_format_a:
-            # Format A
             for course_code, payload in assignments.items():
                 course_id = course_code_to_id.get(course_code)
                 if not course_id:
@@ -434,7 +483,6 @@ def updateDB(assignments: Dict[str, Any]):
                         (ta_id, course_id)
                     )
         else:
-            # Format B
             for course_id, ta_ids in assignments.items():
                 cid = int(course_id)
                 for ta_id in (ta_ids or []):

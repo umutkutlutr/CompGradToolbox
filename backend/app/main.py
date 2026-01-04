@@ -19,6 +19,7 @@ from app.routes import export_assignment_xlsx
 from app.routes import checkers
 from app.routes import register_finish
 from app.routes.assignment_history import router as assignment_history_router
+from app.routes import import_excel
 
 
 
@@ -56,6 +57,7 @@ app.include_router(export_assignment_xlsx.router, prefix="/api")
 app.include_router(assignment_history_router, prefix="/api")
 app.include_router(checkers.router, prefix="/api/checkers", tags=["checkers"])
 app.include_router(register_finish.router)
+app.include_router(import_excel.router)
 
 
 

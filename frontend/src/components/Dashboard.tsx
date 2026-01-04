@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { useEffect, useState } from 'react';
+import { ExcelImportCard } from './ImportButton';
 
 interface DashboardProps {
   name: string;
@@ -227,6 +228,7 @@ export default function Dashboard({ name, userRole, username, onNavigate }: Dash
               </div>
             </CardContent>
           </Card>
+          {userRole === "admin" && <ExcelImportCard />}
           {userRole === "faculty" && (
             <Card>
               <CardHeader>
