@@ -26,9 +26,10 @@ from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI()
 
 # Enable CORS for frontend communication
+# Must be added BEFORE routers are included
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend URL
+    allow_origins=settings.ALLOWED_ORIGINS,  # From ALLOWED_ORIGINS env var
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -72,7 +73,10 @@ def root():
 
 @app.get("/config-check")
 def config_check():
+    """Health check endpoint that returns configuration info (without sensitive data)."""
     return {
+        "status": "ok",
+        "allowed_origins": settings.ALLOWED_ORIGINS,
         "db_host": settings.DB_HOST,
         "db_user": settings.DB_USER,
     }

@@ -1,4 +1,5 @@
 import os
+from typing import List
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -13,6 +14,18 @@ class Settings:
 
     SECRET_KEY: str = os.getenv("SECRET_KEY", "supersecret")
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
+    
+    # CORS allowed origins - comma-separated list
+    # Defaults for local dev, production should set via ALLOWED_ORIGINS env var
+    _allowed_origins_str: str = os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000"
+    )
+    
+    @property
+    def ALLOWED_ORIGINS(self) -> List[str]:
+        """Parse comma-separated origins string into a list, stripping whitespace."""
+        return [origin.strip() for origin in self._allowed_origins_str.split(",") if origin.strip()]
 
 
 settings = Settings()
