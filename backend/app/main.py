@@ -25,8 +25,11 @@ from app.routes import users
 from app.routes.assignment_history import router as assignment_history_router
 from app.routes import import_excel
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
 
-app = FastAPI()
+# Disable automatic slash redirects to prevent 307 redirects
+# This ensures /courses returns 200 directly instead of redirecting to /courses/
+app = FastAPI(redirect_slashes=False)
 
 
 def init_database_schema():
@@ -75,6 +78,13 @@ def init_database_schema():
 async def startup_event():
     """Run database schema initialization on startup."""
     init_database_schema()
+
+# Add ProxyHeadersMiddleware FIRST to handle X-Forwarded-Proto from Railway
+# This ensures redirects and URLs use HTTPS instead of HTTP
+app.add_middleware(
+    ProxyHeadersMiddleware,
+    trusted_hosts="*"  # Railway proxy is trusted
+)
 
 # Enable CORS for frontend communication
 # Must be added BEFORE routers are included

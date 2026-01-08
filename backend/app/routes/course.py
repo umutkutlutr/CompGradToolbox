@@ -7,7 +7,10 @@ from app.core.database import get_db_connection
 
 router = APIRouter()
 
+# Register both / and "" to handle requests with or without trailing slash
+# This prevents 307 redirects when redirect_slashes=False
 @router.get("/", response_model=list[Course])
+@router.get("", response_model=list[Course])
 def read_courses():
     return get_courses()
 

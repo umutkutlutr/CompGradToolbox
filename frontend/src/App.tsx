@@ -1,4 +1,4 @@
-import { use, useState } from 'react';
+import { useState } from 'react';
 import { Home, Users, FileCheck, Settings, BarChart3, Shield, BookOpen, UserPenIcon } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 import RegisterScreen from './components/RegisterScreen';

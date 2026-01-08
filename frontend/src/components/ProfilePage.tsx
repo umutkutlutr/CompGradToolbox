@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { X, Save } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
@@ -97,7 +97,7 @@ export default function ProfilePage({
         // 1) Load picklists in parallel
         const [skillsRes, coursesRes, profsRes, tasRes] = await Promise.all([
           fetch(apiUrl('/api/skills')),
-          fetch(apiUrl('/courses')),
+          fetch(apiUrl('/courses/')),  // Use trailing slash to avoid redirect
           fetch(apiUrl('/api/professors')),
           fetch(apiUrl('/api/tas')),
         ]);
@@ -390,17 +390,19 @@ export default function ProfilePage({
             <CardContent className="space-y-4">
               {/* Selected course pills */}
               <div className="flex flex-wrap gap-2">
-                {Object.entries(coursePrefs).map(([courseCode, interest]) => (
-                  <span
+                {Object.entries(coursePrefs).map(([courseCode, interest]) => {
+                  const interestLevel = interest as InterestLevel;
+                  return (
+                    <span
                     key={courseCode}
                     className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm shadow-sm ${pillClassForInterest(
-                      interest
+                      interestLevel
                     )}`}
                   >
                     <span className="max-w-[140px] truncate font-medium">{courseCode}</span>
 
                     <Select
-                      value={interest}
+                      value={interestLevel}
                       onValueChange={(v) =>
                         setCoursePrefs({ ...coursePrefs, [courseCode]: v as InterestLevel })
                       }
@@ -428,7 +430,8 @@ export default function ProfilePage({
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </span>
-                ))}
+                  );
+                })}
 
                 {Object.entries(coursePrefs).length === 0 && (
                   <div className="text-sm text-neutral-500">No course preferences yet.</div>
