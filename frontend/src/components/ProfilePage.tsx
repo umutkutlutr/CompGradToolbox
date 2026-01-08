@@ -97,7 +97,7 @@ export default function ProfilePage({
         // 1) Load picklists in parallel
         const [skillsRes, coursesRes, profsRes, tasRes] = await Promise.all([
           fetch(apiUrl('/api/skills')),
-          fetch(apiUrl('/courses/')),  // Use trailing slash to avoid redirect
+          fetch(apiUrl('/api/courses')),  // Use /api/courses for consistency with other API endpoints
           fetch(apiUrl('/api/professors')),
           fetch(apiUrl('/api/tas')),
         ]);
